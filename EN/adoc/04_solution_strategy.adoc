@@ -3,6 +3,8 @@ ifndef::imagesdir[:imagesdir: ../images]
 [[section-solution-strategy]]
 == Solution Strategy
 
+The table below maps the fundamental design decisions for *Drop* to the
+goals they serve.
 
 ifdef::arc42help[]
 [role="arc42help"]
@@ -32,3 +34,30 @@ See https://docs.arc42.org/section-4/[Solution Strategy] in the arc42 documentat
 
 ****
 endif::arc42help[]
+
+[cols="2,5a", options="header"]
+|===
+| Goal / Requirement | Architectural Approach
+
+| Functional Suitability & Scalability
+| Modular monolith with strict module boundaries; stateless, so it
+scales horizontally behind a load balancer. Modules are incrementally 
+extracted into microservices as concurrent users grow.
+
+| Secure, flexible and event-driven technology stack
+|
+* Frontend: Flutter - one codebase for Android and iOS.
+* Backend: Spring Boot - REST API, holds business logic.
+* Data & notifications: Firebase.
+* Events / Real-Time: Apache Kafka for internal events, live updates reach apps via Firestore/FCM.
+* Maps: Maps API, routing and matching.
+* Payments: Stripe.
+* Security: TLS, encryption at rest, secrets management, token-based auth.
+
+| Cloud
+| Google Cloud Platform, Firebase is native to GCP.
+
+| QA Approach
+| Layered tests - unit, integration, end-to-end, security, performance,
+user-acceptance - plus Grafana monitoring
+|===

@@ -3,6 +3,7 @@ ifndef::imagesdir[:imagesdir: ../images]
 [[section-context-and-scope]]
 == Context and Scope
 
+This chapter describes the environment and context of *Drop*: Who uses the system and on which other system does *Drop* depend.
 
 ifdef::arc42help[]
 [role="arc42help"]
@@ -51,9 +52,50 @@ The title of the table is the name of your system, the three columns contain the
 ****
 endif::arc42help[]
 
-**<Diagram or Table>**
+image::../images/03_business_context.png[Business Context Diagram]
 
-**<optionally: Explanation of external domain interfaces>**
+_Passenger_
+
+The passenger sends Drop their registration and profile data, ride
+search criteria (pickup, destination and desired time), booking
+requests, ride-completion confirmations, ratings and reviews, and
+payment authorisation. In return, Drop provides the list of available
+rides, booking confirmations, driver and vehicle details, real-time
+tracking and ETA, fare receipts, and ride history.
+
+_Driver_
+
+The driver provides registration, profile and verification documents,
+their availability and current location, the acceptance or decline of
+ride requests, ride-completion confirmations, and ratings and reviews.
+Drop sends the driver incoming ride requests, passenger and pickup
+details, route and navigation information, earnings and payout
+statements, and ride history.
+
+_Payment Processor_
+
+Drop sends the third-party Payment Processor fare charge requests,
+commission deductions and driver payout instructions, and receives
+payment and payout confirmations together with transaction status.
+
+_Map & Routing Provider_
+
+Drop sends the external Map & Routing Provider location coordinates,
+route and ETA requests, and distance / fare estimation queries, and
+receives map data, routes, travel distances and estimated times of
+arrival.
+
+_Identity & Licence Verification Service_
+
+Drop submits driver identity and licence details to this external
+service for checking and receives the verification or background-check
+result. If drivers are instead verified manually in-house, this partner
+can be omitted.
+
+The Passenger and Driver are human actors interacting through the
+mobile app. The Payment Processor, Map & Routing Provider and
+Verification Service are external systems Drop depends on but does not
+own (see constraints TC3, TC4 and OC6).
 
 === Technical Context
 
@@ -73,8 +115,43 @@ together with a mapping table showing the relationships between channels and inp
 ****
 endif::arc42help[]
 
-**<Diagram or Table>**
+Drop is broken into two main components:
 
-**<optionally: Explanation of technical interfaces>**
+_Frontend (Flutter mobile app)_
 
-**<Mapping Input/Output to Channels>**
+The client is built with Dart and Flutter and runs on Android and iOS
+devices. It calls the backend over HTTPS, authenticates through
+Firebase, subscribes to live data, and reads the device GPS sensor to
+determine location.
+
+_Backend (Spring Boot)_
+
+The backend is a Spring Boot application that holds the business logic
+and exposes a REST API over HTTPS. It uses Firebase as a backing service
+- Firestore for ride, profile and location data, and Firebase Cloud
+Messaging for push notifications; clients receive real-time changes such
+as live tracking through Firestore listeners. Maps, routing and payment
+are reached through external providers over the Internet.
+
+[cols="1,1", options="header"]
+|===
+| Business interface | Channel
+
+| User authentication
+| Firebase Authentication over the Internet (HTTPS)
+
+| Business functions (booking, rides, history)
+| Spring Boot REST API over the Internet (HTTPS)
+
+| Ride data and real-time tracking
+| Firebase database (Firestore) over the Internet (HTTPS / WebSocket)
+
+| Push notifications
+| Firebase Cloud Messaging (FCM / APNs)
+
+| Maps, routing and ETA
+| Third-party provider over the Internet (HTTPS)
+
+| Payments
+| Third-party payment provider over the Internet (HTTPS)
+|===

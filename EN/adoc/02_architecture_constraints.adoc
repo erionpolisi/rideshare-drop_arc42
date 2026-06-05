@@ -3,6 +3,10 @@ ifndef::imagesdir[:imagesdir: ../images]
 [[section-architecture-constraints]]
 == Architecture Constraints
 
+The constraints below influence design and implementation
+decisions for *Drop*. This section lists them and, where applicable,
+their motivation. Their identifiers group them by type: technical (TC), organizational
+(OC) and conventions (C).
 
 ifdef::arc42help[]
 [role="arc42help"]
@@ -27,3 +31,38 @@ See https://docs.arc42.org/section-2/[Architecture Constraints] in the arc42 doc
 
 ****
 endif::arc42help[]
+
+[cols="1,3,9", options="header"]
+|===
+| | Constraint | Background and / or motivation
+
+| TC1
+| Implementation in Dart and Flutter
+| The product is mobile-only, so development uses Dart and the Flutter
+framework to support cross-platform deployment for Android and iOS with
+minimal platform-specific changes. Firebase is used alongside it because
+it integrates efficiently with Flutter for authentication, database and
+cloud services.
+
+| TC2
+| Use of third-party services
+| Building proprietary maps, routing and payment infrastructure is
+beyond the scale and budget of this project, so the architecture must
+rely on external providers for these core capabilities.
+
+| TC3
+| Bilingual system (German and English)
+| The system must support both German and English. The company operates
+regionally in Austria but plans to expand internationally in the future.
+
+| OC1
+| GDPR / DSGVO compliance
+| The system processes real-time location data, personal user
+information and banking data. Stakeholders require compliance to ensure
+data privacy, security and the lawful handling of sensitive information.
+
+| C1
+| Documentation in arc42
+| arc42 is the company standard for documenting software architecture,
+ensuring consistent communication.
+|===
