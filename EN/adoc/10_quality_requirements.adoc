@@ -3,7 +3,6 @@ ifndef::imagesdir[:imagesdir: ../images]
 [[section-quality-scenarios]]
 == Quality Requirements
 
-
 ifdef::arc42help[]
 [role="arc42help"]
 ****
@@ -26,87 +25,161 @@ Since quality requirements will have a lot of influence on architectural decisio
 ****
 endif::arc42help[]
 
-
 === Quality Requirements Overview
 
-ifdef::arc42help[]
-[role="arc42help"]
-****
+The top-level quality goals (Security, Functional Suitability,
+Scalability, Sustainability) are already listed in section 1.2 and are
+not repeated here. The tree below refines them, adds the most relevant
+secondary qualities and links them to the scenarios in section 10.2.
 
-.Content
-An overview or summary of quality requirements. 
+[cols="1,2,3", options="header"]
+|===
+| Top-level Quality (from 1.2) | Sub-quality | Refinement / Acceptance Criterion
 
+| Security
+| Confidentiality
+| Personal data and payment tokens accessible only to authenticated
+users with the appropriate role.
 
-.Motivation
-Often we encounter dozens (or even hundreds) of detailed quality requirements. 
-In this overview section you should try to summarize, e.g. by describing categories or topics (as suggested by https://www.iso.org/obp/ui/#iso:std:iso-iec:25010:ed-2:v1:en[ISO 25010:2023] or https://quality.arc42.org[Q42])
+| Security
+| Authentication
+| Every request to the backend carries a valid JWT; expired or invalid
+tokens are rejected with HTTP 401.
 
-If these summary descriptions are already precise, specific enough and measurable, you may skip section 10.2.
+| Functional Suitability
+| Correctness
+| Booking, tracking, completion and payment behave as specified for
+the use cases in chapter 3.
 
-.Form
-Use a simple table in which each line contains a category or topic and a short description of the quality requirement.
-Alternatively, you may use a mindmap to structure these quality requirements.
-In literature, the idea of a _quality attribute tree_ has also been described, which puts the generic term "quality" as the root and uses a tree-like refinement of the term "quality". 
-[Bass+21] introduced the term "Quality Attribute Utility Tree" for this purpose.
+| Functional Suitability
+| Reliability
+| Ride completion and payment succeed even if non-critical components
+(Analytics, Notifications) are temporarily unavailable.
 
+| Scalability
+| Elasticity
+| Backend, Payment Service and Realtime Service scale horizontally
+without code changes.
 
+| Scalability
+| Real-time performance
+| Live tracking updates stay perceivably real-time even when the
+number of concurrent rides grows by an order of magnitude.
 
-****
-endif::arc42help[]
+| Sustainability
+| Resource efficiency
+| Routing minimises detours; carpooling matches are preferred where
+possible.
 
+| Sustainability
+| Eco-friendly fleet
+| Driver onboarding and matching support a preference for electric
+vehicles.
+
+| Maintainability (secondary)
+| Modularity
+| New analytics categories or new bounded contexts can be added
+without modifying existing controllers (see chapter 5, Level 3).
+
+| Usability (secondary)
+| Internationalisation
+| Full app and error-message coverage in German and English
+(constraint TC3).
+|===
 
 === Quality Scenarios
 
-ifdef::arc42help[]
-[role="arc42help"]
-****
+The scenarios are written in short form (Context, Stimulus, Response /
+Acceptance Criterion). They are the ones used to verify the quality
+goals at architecture review time.
 
-.Content
-Quality scenarios make quality requirements concrete and allow to decide whether they are fulfilled (in the sense of acceptance criteria).
-Ensure that your scenarios are specific and measurable.
+==== QS-1 (Security) – Stolen device
 
+Context::
+A user’s phone is stolen. The thief tries to call the Drop backend
+directly using a cookie captured from the device.
 
+Stimulus::
+A request with a JWT that has been revoked because the user reported
+the loss.
 
-Two kinds of scenarios are especially useful:
+Acceptance Criterion::
+The backend rejects the request with HTTP 401 within 200 ms. No
+personal data or payment information is returned.
 
-* _Usage scenarios_ (also called application scenarios or use case scenarios) describe the system’s runtime reaction to a certain stimulus. 
-This also includes scenarios that describe the system’s efficiency or performance. 
-Example: The system reacts to a user’s request within one second.
-* _Change scenarios_ describe the desired effect of a modification or extension of the system or of its immediate environment. 
-Example: Additional functionality is implemented or requirements for a quality attribute change, and the effort or duration of the change is measured.
+==== QS-2 (Security) – Card data leak attempt
 
+Context::
+A misconfigured log statement accidentally includes the payment
+payload.
 
-.Form
+Stimulus::
+A developer searches the production logs for a card number pattern.
 
-Typical information for detailed scenarios include the following:
+Acceptance Criterion::
+No raw card data is found, because card data is never sent to the Drop
+backend – only Stripe tokens (ADR-3).
 
-In short form (favoured in the Q42 model):
+==== QS-3 (Functional Suitability) – Booking under flaky network
 
-* **Context/Background**: What kind of system or component, what is the envirionment or situation?
-* **Source/Stimulus**: Who or what initiates or triggers a behaviour, reaction or action.
-* **Metric/Acceptance Criteria**: A response including a _measure_ or _metric_
+Context::
+A passenger books a ride from a train with intermittent connectivity.
 
+Stimulus::
+The booking request is retried twice with the same idempotency key.
 
-The long form of scenarios (favoured by the SEI and [Bass+21]) is more detailed and includes the following information:
+Acceptance Criterion::
+Exactly one ride is created. The passenger is not charged twice.
 
-* **Scenario ID**: A unique identifier for the scenario.
-* **Scenario Name**: A short, descriptive name for the scenario.
-* **Source**: The entity (user, system, or event) that initiates the scenario.
-* **Stimulus**: The triggering event or condition the system must address.
-* **Environment**: The operational context or condition under which the system experiences the stimulus.
-* **Artifact**: The building-blocks or other elements of the system affected by the stimulus.
-* **Response**: The outcome or behavior the system exhibits in reaction to the stimulus.
-* **Response Measure**: The criteria or metric by which the system’s response is evaluated.
+==== QS-4 (Functional Suitability) – Stripe outage
 
+Context::
+Stripe is unavailable for 10 minutes during peak hours.
 
-.Examples
-See https://quality.arc42.org[the Q42 quality model website] for detailed examples of quality requirements.
+Stimulus::
+Several rides reach the completion state during the outage.
 
-.Further Information
+Acceptance Criterion::
+Rides are still marked completed; payments are queued and processed
+within 5 minutes after Stripe recovers; users see a clear message that
+the receipt will arrive shortly.
 
-* Len Bass, Paul Clements, Rick Kazman: "Software Architecture in Practice", 4th Edition, Addison-Wesley, 2021.
+==== QS-5 (Scalability) – Tenfold concurrent rides
 
-****
+Context::
+The user base grows by a factor of 10 over six months.
 
+Stimulus::
+A typical peak hour now produces 10× the previous number of concurrent
+active rides.
 
-endif::arc42help[]
+Acceptance Criterion::
+End-to-end booking latency (P95) stays under 2 s; live-tracking
+updates stay under 3 s perceived delay; no code changes are required
+to scale the backend.
+
+==== QS-6 (Scalability) – New analytics dimension
+
+Context::
+The business asks for a new "carbon saved" metric.
+
+Stimulus::
+A new analytics category must be added.
+
+Acceptance Criterion::
+The new metric can be added by extending the Analytics Repository
+(new aggregate + `AnalyticsRecord` instances) without modifying
+existing controllers (see chapter 5, Level 3).
+
+==== QS-7 (Sustainability) – EV preference
+
+Context::
+Several drivers in the matching radius are equally suitable.
+
+Stimulus::
+A passenger requests a ride and one of the candidate drivers uses an
+electric vehicle.
+
+Acceptance Criterion::
+The EV driver is ranked higher than non-EV drivers of equal
+suitability, all else being equal.

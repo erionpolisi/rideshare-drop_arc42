@@ -1,8 +1,6 @@
 ifndef::imagesdir[:imagesdir: ../images]
 
 [[section-deployment-view]]
-
-
 == Deployment View
 
 ifdef::arc42help[]
@@ -46,55 +44,145 @@ endif::arc42help[]
 
 === Infrastructure Level 1
 
-ifdef::arc42help[]
-[role="arc42help"]
-****
-Describe (usually in a combination of diagrams, tables, and text):
-
-* distribution of a system to multiple locations, environments, computers, processors, .., as well as physical connections between them
-* important justifications or motivations for this deployment structure
-* quality and/or performance features of this infrastructure
-* mapping of software artifacts to elements of this infrastructure
-
-For multiple environments or alternative deployments please copy and adapt this section of arc42 for all relevant environments.
-****
-endif::arc42help[]
-
-_**<Overview Diagram>**_
-
 Motivation::
+Drop is operated as a cloud-native application on Google Cloud
+Platform (GCP). GCP was chosen because Firebase – which we use for
+authentication, real-time database and push notifications – is native
+to GCP, which keeps latency and operational overhead low.
 
-_<explanation in text form>_
+The mobile apps run on the end users' devices; everything else runs in
+GCP. Stripe and the Map & Routing Provider are reached over the public
+Internet as managed third-party services.
+
+Overview::
+
+[cols="1,3", options="header"]
+|===
+| Node / Environment | Hosted Software
+
+| End-user devices (Android, iOS)
+| Drop Mobile App (Flutter)
+
+| GCP – Cloud Run / GKE
+| Backend (Spring Boot monolith), Payment Service,
+Realtime/Location Service
+
+| GCP – Cloud SQL (PostgreSQL)
+| Operational data of the monolith (Identity, Rides, Matching,
+Payments façade, Analytics Repository)
+
+| GCP – Firebase
+| Firebase Authentication, Firestore (real-time ride/location data),
+Firebase Cloud Messaging (push)
+
+| GCP – Pub/Sub or self-managed Kafka
+| Internal domain event bus (e.g. `RideCompleted`,
+`PaymentSettled`, `UserRegistered`)
+
+| GCP – Cloud Logging / Cloud Monitoring / Grafana
+| Logs, metrics, dashboards, alerting
+
+| External – Stripe Connect
+| Charges, driver payouts, commission split
+
+| External – Map & Routing Provider
+| Geocoding, routing, ETA
+
+| External – Identity / Licence Verification (optional)
+| Driver background checks
+|===
 
 Quality and/or Performance Features::
-
-_<explanation in text form>_
+* *Scalability* – the backend, the Payment Service and the
+  Realtime/Location Service are stateless and run behind a managed
+  load balancer; they scale horizontally on CPU and request count.
+* *Availability* – managed services (Firestore, Cloud SQL, Stripe)
+  remove most of the operational burden from the small team.
+* *Security* – TLS for every external channel, encryption at rest for
+  Cloud SQL and Firestore, secrets in GCP Secret Manager, JWTs in
+  HttpOnly/Secure cookies.
+* *Cost* – pay-per-use services keep infrastructure cost low while the
+  user base is still growing (constraint: tight budget, small team).
 
 Mapping of Building Blocks to Infrastructure::
-_<description of the mapping>_
 
+[cols="1,2", options="header"]
+|===
+| Building Block (chapter 5) | Infrastructure Node
+
+| Mobile App
+| End-user device (Android / iOS)
+
+| Backend (modular monolith)
+| Cloud Run / GKE service `drop-backend`
+
+| Payment Service
+| Cloud Run / GKE service `drop-payments`
+
+| Realtime / Location Service
+| Cloud Run / GKE service `drop-realtime` + Firestore + FCM
+
+| Analytics Repository
+| Cloud SQL schema `analytics` accessed by the monolith
+
+| Identity provider
+| Firebase Authentication
+
+| Event bus
+| GCP Pub/Sub or managed Kafka
+
+| Map & Routing
+| External provider (HTTPS)
+
+| Payment provider
+| Stripe Connect (HTTPS + webhooks)
+|===
 
 === Infrastructure Level 2
 
-ifdef::arc42help[]
-[role="arc42help"]
-****
-Here you can include the internal structure of (some) infrastructure elements from level 1.
+==== Mobile App
 
-Please copy the structure from level 1 for each selected element.
-****
-endif::arc42help[]
+The Flutter app is distributed through the Apple App Store and the
+Google Play Store. It bundles a thin Dart networking layer that talks
+to the Backend over HTTPS, a Firebase SDK for authentication, push and
+Firestore listeners, and native bridges for background GPS.
 
-==== _<Infrastructure Element 1>_
+==== Backend (Monolith)
 
-_<diagram + explanation>_
+The Spring Boot monolith is packaged as a container image. A typical
+production deployment runs at least two instances behind the load
+balancer to survive a single-instance outage. Each instance is
+stateless – session state lives in the client JWT and in Firestore.
+The instances share a Cloud SQL database for persistent data and
+publish/consume events on the internal event bus.
 
-==== _<Infrastructure Element 2>_
+==== Payment Service
 
-_<diagram + explanation>_
+A dedicated service is used to keep PCI scope small. The service
+exposes a narrow internal REST API to the monolith, calls Stripe
+Connect over HTTPS, and receives Stripe webhooks on a dedicated
+public endpoint that verifies the Stripe signature header.
 
-...
+==== Realtime / Location Service
 
-==== _<Infrastructure Element n>_
+The Realtime Service is intentionally thin: most of the heavy lifting
+is done by Firestore (real-time database) and FCM (push). The service
+owns the schema and access rules of the ride / location documents and
+fans out internal events when relevant state changes happen.
 
-_<diagram + explanation>_
+==== Environments
+
+Three environments are operated with identical infrastructure
+definitions:
+
+[cols="1,3", options="header"]
+|===
+| Environment | Purpose
+
+| `dev`     | Continuous deployment from `main` for the development team.
+| `staging` | Pre-production verification, integration tests, UAT.
+| `prod`    | End-user traffic.
+|===
+
+Infrastructure is provisioned as code (e.g. Terraform) so that the
+three environments stay aligned.

@@ -32,13 +32,113 @@ See https://docs.arc42.org/section-12/[Glossary] in the arc42 documentation.
 ****
 endif::arc42help[]
 
-[cols="e,2e" options="header"]
+[cols="1,3", options="header"]
 |===
-|Term |Definition
+| Term | Definition
 
-|<Term-1>
-|<definition-1>
+| ADR
+| Architecture Decision Record. Lightweight document capturing one
+significant architectural decision and its rationale (chapter 9).
 
-|<Term-2>
-|<definition-2>
+| Admin
+| Internal role for operating the Drop platform; manages users,
+reviews reports and oversees operations.
+
+| AnalyticsRecord
+| Generic key/value record used by the Analytics Repository to store
+individual metrics (chapter 5, Level 3).
+
+| Backend
+| The Spring Boot modular monolith that exposes Drop’s REST API and
+contains the bounded contexts Identity, Matching, Rides, Payments,
+Analytics and Notifications.
+
+| Bounded Context
+| Cohesive area of the domain with its own model, owned by exactly
+one module of the backend (chapter 5, Level 2).
+
+| Circuit Breaker
+| Resilience pattern that stops calling a failing dependency for a
+cooldown period; used for all outbound external calls (chapter 8).
+
+| Domain Event
+| Asynchronous message that one bounded context publishes when
+something noteworthy has happened (e.g. `RideCompleted`).
+
+| Driver
+| End-user role that offers rides through the app and receives
+payouts.
+
+| Drop
+| The ride-sharing platform documented here (project name *RideShare*,
+product name *Drop*).
+
+| FCM
+| Firebase Cloud Messaging. Managed push notification service used by
+the Realtime Service (chapter 7).
+
+| Firebase
+| Backend-as-a-service from Google used for authentication, the
+real-time database (Firestore) and push (FCM).
+
+| Firestore
+| Real-time NoSQL database in Firebase used for live ride and location
+documents.
+
+| Flutter
+| Cross-platform UI framework (Dart) used to build the Drop mobile
+app (constraint TC1, ADR-1).
+
+| GDPR / DSGVO
+| EU regulation on the protection of personal data; binding for Drop
+(constraint OC1).
+
+| Idempotency Key
+| Client-supplied key that allows a write request to be safely retried
+without producing duplicates.
+
+| JWT
+| JSON Web Token (RFC 7519) issued by the identity provider; carries
+user ID and role, transported in an HttpOnly/Secure cookie
+(chapter 8).
+
+| Kafka / Pub/Sub
+| Internal event bus used for domain events between bounded contexts
+(ADR-6).
+
+| Modular Monolith
+| Single deployable backend organised into independent modules
+(bounded contexts) with no direct cross-module calls (ADR-2).
+
+| Passenger
+| End-user role that books rides through the app.
+
+| PCI-DSS
+| Payment Card Industry Data Security Standard. Card data must never
+be stored in Drop; this is delegated to Stripe (ADR-3).
+
+| Payment Service
+| Microservice that integrates Stripe Connect for charges, payouts
+and commission split.
+
+| Realtime Service
+| Microservice responsible for streaming ride and driver-location
+updates via Firestore and FCM.
+
+| Ride
+| One trip between a pickup and a destination, with one passenger
+(or group) and one driver. Goes through the states `REQUESTED`,
+`ACCEPTED`, `IN_PROGRESS`, `COMPLETED` (or `CANCELLED`).
+
+| RFC 7807 (Problem Details)
+| Standard format for HTTP error responses used by all REST APIs of
+Drop (chapter 8).
+
+| Stripe Connect
+| Marketplace payment platform used by Drop to handle charges, driver
+payouts and the commission split (ADR-3).
+
+| TDD
+| Test-Driven Development. Default working style for Drop
+(chapter 8).
 |===

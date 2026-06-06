@@ -3,7 +3,6 @@ ifndef::imagesdir[:imagesdir: ../images]
 [[section-design-decisions]]
 == Architecture Decisions
 
-
 ifdef::arc42help[]
 [role="arc42help"]
 ****
@@ -35,3 +34,123 @@ There you will find links and examples about ADR.
 
 ****
 endif::arc42help[]
+
+The decisions below are the most consequential ones for *Drop*. They
+are listed in lightweight ADR form: context, decision, consequences.
+The summary already given in chapter 4 (Solution Strategy) points to
+these decisions.
+
+=== ADR-1: Cross-platform Mobile App with Flutter
+
+Context::
+The product must ship on both iOS and Android, but the regional company
+has a relatively small team, a tight budget and must reach the market
+quickly to compete with established providers.
+
+Decision::
+Build both apps from a single cross-platform code base in *Flutter /
+Dart*, dropping to native code only where unavoidable (background GPS,
+push notifications).
+
+Consequences::
+* (+) One code base, smaller team, faster delivery, consistent UX.
+* (–) Framework dependency on Flutter; native bridges are still needed
+  for maps and background location.
+* (–) Some overhead for very heavy real-time map rendering.
+
+=== ADR-2: Modular Monolith with Bounded Contexts
+
+Context::
+Scalability for a large number of users and rides is a non-functional
+requirement, yet the team is small and the principles *KISS* and
+*YAGNI* warn against premature distribution.
+
+Decision::
+Start with a *modular monolith* with clear bounded contexts (Identity,
+Matching, Rides, Payments, Analytics) deployed as one unit. Keep the
+seams so that high-load contexts can later be extracted into separate
+microservices.
+
+Consequences::
+* (+) Simple deployment and operations, fast development, easy
+  debugging, low infrastructure cost.
+* (+) Bounded contexts are ready for extraction once load justifies
+  it.
+* (–) Requires discipline to keep boundaries clean.
+* (–) Coarse-grained scaling at first; extraction work later when
+  load grows.
+
+=== ADR-3: Use Stripe Connect for Payments
+
+Context::
+The app must charge passengers, pay out drivers and take a commission,
+while meeting the strict security and data-protection requirement and
+PCI-DSS. The team has no in-house payment expertise.
+
+Decision::
+Use a PCI-DSS-compliant marketplace processor – *Stripe Connect* – for
+charges, driver payouts and the commission split, instead of building
+payment handling ourselves.
+
+Consequences::
+* (+) PCI scope offloaded; cards are tokenised (no card data stored).
+* (+) Built-in split payouts and reporting.
+* (–) Per-transaction fees reduce margin.
+* (–) Vendor lock-in; dependency on Stripe availability – mitigated
+  by the Circuit Breaker pattern (chapter 8).
+
+=== ADR-4: Managed Real-time Messaging instead of Custom Sockets
+
+Context::
+Live driver location and ETA are core to the experience and must
+stream to many concurrent rides with low latency. Building an own
+socket layer is too costly for a small team.
+
+Decision::
+Stream driver location and ride status through a *managed real-time
+messaging service* (Firebase Firestore listeners and Firebase Cloud
+Messaging) instead of operating our own socket infrastructure.
+
+Consequences::
+* (+) Low-latency updates, managed scaling and connection handling.
+* (+) Built-in push and offline support.
+* (–) Per-message / per-connection cost.
+* (–) Vendor lock-in; update frequency must be tuned to balance
+  battery life and data use.
+
+=== ADR-5: GCP + Firebase as Cloud Platform
+
+Context::
+Drop already commits to Firebase for authentication, push and real-time
+data (ADR-4). A separate cloud provider for the rest of the workload
+would add operational complexity.
+
+Decision::
+Operate the backend, Payment Service and Realtime Service on *Google
+Cloud Platform* (Cloud Run / GKE, Cloud SQL, Pub/Sub) so that they sit
+next to Firebase.
+
+Consequences::
+* (+) Low latency between backend and Firebase, single IAM model,
+  single billing, fewer moving parts.
+* (–) Vendor lock-in to GCP; a multi-cloud exit would require
+  re-platforming.
+
+=== ADR-6: Internal Communication via Domain Events on Kafka / Pub/Sub
+
+Context::
+Bounded contexts must stay decoupled so they can later be extracted.
+Direct synchronous calls between contexts would re-introduce coupling
+that is hard to undo.
+
+Decision::
+Cross-context communication uses asynchronous *domain events* on an
+internal event bus (managed Kafka or GCP Pub/Sub). Synchronous calls
+are reserved for the REST API and for outbound calls to external
+systems.
+
+Consequences::
+* (+) Contexts are decoupled and extraction-ready.
+* (+) Eventual-consistency model is explicit and visible in the API.
+* (–) Requires careful handling of duplicate and out-of-order events
+  (mitigated by idempotency keys, chapter 8).

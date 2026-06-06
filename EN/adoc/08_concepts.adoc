@@ -3,7 +3,6 @@ ifndef::imagesdir[:imagesdir: ../images]
 [[section-concepts]]
 == Cross-cutting Concepts
 
-
 ifdef::arc42help[]
 [role="arc42help"]
 ****
@@ -48,18 +47,110 @@ See https://docs.arc42.org/section-8/[Concepts] in the arc42 documentation.
 ****
 endif::arc42help[]
 
-=== _<Concept 1>_
+This chapter collects the concepts that span multiple building blocks
+of *Drop* and that must therefore be applied consistently across the
+whole system.
 
-_<explanation>_
+=== Layering, Pub/Sub and Resilience Patterns
 
+Drop combines a modular monolith with a small number of selected
+microservices. Inside every component the same layering is used –
+controller, application service, domain, infrastructure – so that the
+same patterns apply everywhere.
 
+Core domains (Identity, Matching, Rides, Payments) are structured as
+*bounded contexts*. They do not call each other directly: cross-context
+communication uses *publish/subscribe* over the internal event bus
+(domain events such as `RideCompleted`, `PaymentSettled`,
+`UserRegistered`). Scalable real-time features (driver location, ride
+status to the apps) use a managed pub/sub channel (Firestore / FCM).
 
-=== _<Concept 2>_
+To stay resilient against flaky networks and external dependencies the
+following patterns are applied at every outbound call:
 
-_<explanation>_
+* *Circuit Breaker* – open the circuit after a configurable failure
+  rate; fail fast instead of stacking up requests.
+* *Retry with Exponential Backoff* – for idempotent operations only.
+* *Idempotency Keys* – on every write endpoint that can be retried by
+  the client (e.g. booking, payment).
+* *RFC 7807 Problem Details* – standardised error responses across all
+  REST APIs so that the apps can render uniform error messages.
 
-...
+=== Security and Authorisation
 
-=== _<Concept n>_
+Authentication is required at every entry point; authorisation is
+checked on every sensitive action.
 
-_<explanation>_
+* *Identity* – delegated to an external identity provider; Drop never
+  stores passwords.
+* *Tokens* – JWT (RFC 7519) issued by the identity provider, delivered
+  to the apps in an *HttpOnly, Secure* cookie. Tokens carry the user
+  ID and the role.
+* *Roles* – `PASSENGER`, `DRIVER`, `ADMIN`. Role checks are enforced in
+  the backend, not in the app.
+* *Transport* – TLS on every external channel (mobile ↔ backend,
+  backend ↔ external services, webhooks).
+* *At rest* – encryption for Cloud SQL and Firestore; secrets in GCP
+  Secret Manager.
+* *Payment data* – card data is *never* stored in Drop; only Stripe
+  payment-processor tokens are persisted (constraint OC1, ADR-3).
+
+=== Data Protection (GDPR / DSGVO)
+
+Drop processes real-time location data, personal user data and
+financial data – all of which fall under GDPR.
+
+* *Lawful basis* – contract for ride processing, explicit consent for
+  optional analytics.
+* *Data minimisation* – location traces are stored only for the
+  duration needed to complete and bill the ride, then aggregated.
+* *Right to erasure* – an account-deletion flow removes personal data
+  and anonymises historical ride records that must be kept for
+  bookkeeping.
+* *Data residency* – Cloud SQL and Firestore are configured in EU
+  regions.
+
+=== Testing
+
+The system follows a *Test-Driven Development* (TDD) approach. Tests
+are layered:
+
+* *Unit tests* – per class / domain rule, fast feedback in CI.
+* *Integration tests* – per bounded context, against a real database
+  and an in-memory event bus.
+* *Contract tests* – for the REST API and for the Stripe webhook
+  endpoint.
+* *End-to-end tests* – cover the critical user journeys (registration,
+  booking, completion, payment).
+* *Security and performance tests* – run on a schedule against the
+  `staging` environment.
+
+=== CI/CD
+
+Every commit triggers the CI/CD pipeline:
+
+. Static analysis and unit tests on every push.
+. Build of container images and the Flutter app bundles.
+. Integration and contract tests on `dev`.
+. Manual approval gate, then promotion to `staging` and `prod`.
+. Mobile builds are uploaded to the App Store and Play Store
+  test tracks.
+
+Infrastructure is provisioned as code so that `dev`, `staging` and
+`prod` stay in sync.
+
+=== Logging, Monitoring and Tracing
+
+All services emit structured JSON logs to GCP Cloud Logging. Metrics
+are scraped into Cloud Monitoring and visualised in Grafana
+dashboards. Each request carries a correlation ID that is propagated
+through the event bus so that one ride can be traced end-to-end across
+the monolith, the Payment Service and the Realtime Service.
+
+=== Internationalisation
+
+Drop ships in German and English (constraint TC3). User-facing strings
+are externalised into resource bundles in the app; the backend returns
+machine-readable error codes that the app translates locally. New
+languages can be added without code changes once translations are
+provided.

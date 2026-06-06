@@ -1,8 +1,6 @@
 ifndef::imagesdir[:imagesdir: ../images]
 
 [[section-building-block-view]]
-
-
 == Building Block View
 
 ifdef::arc42help[]
@@ -44,182 +42,221 @@ endif::arc42help[]
 
 === Whitebox Overall System
 
-ifdef::arc42help[]
-[role="arc42help"]
-****
-Here you describe the decomposition of the overall system using the following white box template. It contains
-
- * an overview diagram
- * a motivation for the decomposition
- * black box descriptions of the contained building blocks. For these we offer you alternatives:
-
-   ** use _one_ table for a short and pragmatic overview of all contained building blocks and their interfaces
-   ** use a list of black box descriptions of the building blocks according to the black box template (see below).
-   Depending on your choice of tool this list could be sub-chapters (in text files), sub-pages (in a Wiki) or nested elements (in a modeling tool).
-
-
- * (optional:) important interfaces, that are not explained in the black box templates of a building block, but are very important for understanding the white box.
-Since there are so many ways to specify interfaces why do not provide a specific template for them.
- In the worst case you have to specify and describe syntax, semantics, protocols, error handling,
- restrictions, versions, qualities, necessary compatibilities and many things more.
-In the best case you will get away with examples or simple signatures.
-
-****
-endif::arc42help[]
-
-_**<Overview Diagram>**_
+image::05_level1.png["Level 1 - Overall system: Mobile App, Backend (modular monolith), Payment Service, Realtime Service, Analytics Repository and external systems"]
 
 Motivation::
-
-_<text explanation>_
-
+Drop is decomposed into a small number of coarse-grained building
+blocks. The split reflects the solution strategy (chapter 4): a single
+mobile codebase, a modular Spring Boot backend with clear bounded
+contexts, and a small number of selected microservices for capabilities
+that need independent scaling (payments, real-time location). External
+systems are kept as black boxes.
 
 Contained Building Blocks::
-_<Description of contained building block (black boxes)>_
+
+[cols="1,3", options="header"]
+|===
+| Name | Responsibility
+
+| Mobile App
+| Flutter-based client for Android and iOS. Renders the UI for
+passengers and drivers, calls the backend over HTTPS, and subscribes to
+real-time updates.
+
+| Backend
+| Spring Boot modular monolith. Holds the core business logic and
+exposes the REST API for all use cases (registration, search, booking,
+ride lifecycle, history, reporting).
+
+| Payment Service
+| Microservice that integrates with Stripe Connect for charges, driver
+payouts and commission split. Isolates PCI scope from the monolith.
+
+| Realtime / Location Service
+| Microservice that streams driver location and ride status updates to
+clients via a managed pub/sub channel (Firestore / FCM).
+
+| Analytics Repository
+| Stores and aggregates operational, revenue and user metrics for
+reporting and business intelligence.
+
+| External Systems
+| Map & Routing Provider, Identity / Licence Verification, Stripe and
+Push Notification Service. Described as external actors in chapter 3.
+|===
 
 Important Interfaces::
-_<Description of important interfaces>_
 
-ifdef::arc42help[]
-[role="arc42help"]
-****
-Insert your explanations of black boxes from level 1:
-
-If you use tabular form you will only describe your black boxes with name and
-responsibility according to the following schema:
-
-[cols="1,2" options="header"]
-|===
-| **Name** | **Responsibility**
-| _<black box 1>_ | _<Text>_
-| _<black box 2>_ | _<Text>_
-|===
-
-
-
-If you use a list of black box descriptions then you fill in a separate black box template for every important building block .
-Its headline is the name of the black box.
-****
-endif::arc42help[]
-
-==== <Name black box 1>
-
-ifdef::arc42help[]
-[role="arc42help"]
-****
-Here you describe <black box 1>
-according the the following black box template:
-
-* Purpose/Responsibility
-* Interface(s), when they are not extracted as separate paragraphs. This interfaces may include qualities and performance characteristics.
-* (Optional) Quality-/Performance characteristics of the black box, e.g.availability, run time behavior, ....
-* (Optional) directory/file location
-* (Optional) Fulfilled requirements (if you need traceability to requirements).
-* (Optional) Open issues/problems/risks
-
-****
-endif::arc42help[]
-
-_<Purpose/Responsibility>_
-
-_<Interface(s)>_
-
-_<(Optional) Quality/Performance Characteristics>_
-
-_<(Optional) Directory/File Location>_
-
-_<(Optional) Fulfilled Requirements>_
-
-_<(optional) Open Issues/Problems/Risks>_
-
-
-
-
-==== <Name black box 2>
-
-_<black box template>_
-
-==== <Name black box n>
-
-_<black box template>_
-
-
-==== <Name interface 1>
-
-...
-
-==== <Name interface m>
-
-
+* *Mobile App <-> Backend* – REST/HTTPS API for business operations;
+  JWT in an HttpOnly, Secure cookie (issued by the external identity
+  provider).
+* *Mobile App <-> Realtime Service* – Firestore listeners (WebSocket)
+  and Firebase Cloud Messaging for push.
+* *Backend <-> Payment Service* – Internal REST plus Stripe webhooks for
+  asynchronous settlement events.
+* *Backend <-> External Map / Identity providers* – HTTPS, guarded by
+  Circuit Breaker and Retry-with-Backoff (see chapter 8).
 
 === Level 2
 
-ifdef::arc42help[]
-[role="arc42help"]
-****
-Here you can specify the inner structure of (some) building blocks from level 1 as white boxes.
+This level zooms into the *Backend* monolith, which contains the bulk
+of the business logic. The monolith is structured as a set of bounded
+contexts. The boundaries are enforced in code (package boundaries, no
+direct cross-context calls) so that high-load contexts can later be
+extracted as microservices without rewriting them.
 
-You have to decide which building blocks of your system are important enough to justify such a detailed description.
-Please prefer relevance over completeness. Specify important, surprising, risky, complex or volatile building blocks.
-Leave out normal, simple, boring or standardized parts of your system
-****
-endif::arc42help[]
+==== White Box: Backend (Modular Monolith)
 
-==== White Box _<building block 1>_
+image::05_level2_backend.png["Level 2 - Backend modular monolith with bounded contexts: Identity, Matching, Rides, Payments, Analytics, Notifications"]
 
-ifdef::arc42help[]
-[role="arc42help"]
-****
-...describes the internal structure of _building block 1_.
-****
-endif::arc42help[]
+Motivation::
+Splitting the backend into bounded contexts gives the small team the
+simplicity of a single deployable unit while preserving clear seams for
+future extraction. Each context owns its data and exposes a controller
+layer for the REST API and an internal interface for the other
+contexts.
 
-_<white box template>_
+Contained Building Blocks::
 
-==== White Box _<building block 2>_
+[cols="1,3", options="header"]
+|===
+| Context | Responsibility
 
+| Identity
+| User registration, profile management, role assignment
+(Passenger / Driver / Admin), session/JWT handling.
 
-_<white box template>_
+| Matching
+| Search for nearby rides, driver assignment, dispatch of ride
+requests to drivers.
 
-...
+| Rides
+| Ride lifecycle: booking, acceptance/decline, tracking handover to
+the Realtime Service, completion, history.
 
-==== White Box _<building block m>_
+| Payments
+| Façade in front of the Payment Service. Translates ride completion
+into a charge + payout + commission split through Stripe Connect.
 
+| Analytics
+| Collects domain events from the other contexts (ride completed,
+payment processed, user registered) and feeds them into the
+*Analytics Repository* (see Level 3).
 
-_<white box template>_
+| Notifications
+| Sends transactional notifications (ride status, payouts) through the
+external Push Notification Service.
+|===
 
+Important Interfaces::
 
+* Each context exposes a REST controller package.
+* Cross-context communication uses domain events published on Kafka
+  (e.g. `RideCompleted`, `PaymentSettled`, `UserRegistered`) instead
+  of direct method calls. This keeps contexts decoupled and prepares
+  them for extraction.
 
 === Level 3
 
-ifdef::arc42help[]
-[role="arc42help"]
-****
-Here you can specify the inner structure of (some) building blocks from level 2 as white boxes.
+This level zooms into the *Analytics* context from Level 2, because it
+has the most architecturally relevant internal structure: it is the
+only context organised around a dedicated repository with several
+domain-specific aggregates.
 
-When you need more detailed levels of your architecture please copy this
-part of arc42 for additional levels.
-****
-endif::arc42help[]
+==== White Box: Analytics Repository
 
-==== White Box <_building block x.1_>
+image::05_level3_analytics.png["Level 3 - Analytics Repository with ReportsController, AnalyticsController, RideAnalytics, RevenueAnalytics, UserAnalytics and AnalyticsRecord"]
 
-ifdef::arc42help[]
-[role="arc42help"]
-****
-Specifies the internal structure of _building block x.1_.
-****
-endif::arc42help[]
+Purpose::
+The Analytics Repository is responsible for collecting, storing and
+providing analytical data related to ride activity, revenue generation
+and user engagement.
 
-_<white box template>_
+Responsibilities::
+* Aggregate operational data
+* Store analytical metrics
+* Provide reports to controllers
+* Support business intelligence functions
+* Enable revenue and usage analysis
 
+Contained Building Blocks::
 
-==== White Box <_building block x.2_>
+[cols="1,3", options="header"]
+|===
+| Name | Responsibility
 
-_<white box template>_
+| AnalyticsRepository
+| Central repository that manages analytics data and provides access to
+the different analytical domains. Used by `ReportsController` and
+`AnalyticsController`. Persists analytics information, retrieves
+analytical metrics, aggregates data from analytical records and
+provides reporting data.
 
+| ReportsController
+| Generates and serves business reports. Requests analytics data from
+`AnalyticsRepository`, generates reports and exposes report endpoints.
 
+| AnalyticsController
+| Exposes analytics-related APIs. Serves analytics requests, retrieves
+metrics from `AnalyticsRepository` and delivers analytical summaries.
 
-==== White Box <_building block y.1_>
+| RideAnalytics
+| Operational metrics. Attributes: `totalRides : int`,
+`averageDistance : double`, `averageDuration : double`. Tracks ride
+volume and calculates average trip distance and duration.
 
-_<white box template>_
+| RevenueAnalytics
+| Financial performance metrics. Attributes:
+`totalRevenue : double`, `averageFare : double`. Tracks platform
+revenue, calculates average fare values and supports financial
+reporting.
+
+| UserAnalytics
+| User activity metrics. Attributes: `activeUsers : int`,
+`completedRides : int`. Monitors active user base, measures user
+engagement and tracks ride completion statistics.
+
+| AnalyticsRecord
+| Generic analytical data record representing an individual metric.
+Attributes: `metricName : String`, `metricValue : double`. Stores
+metric values, supports aggregation and provides historical analytical
+data.
+|===
+
+Relationships::
+
+[cols="2,1,2", options="header"]
+|===
+| Source | Relationship | Target
+
+| AnalyticsRepository | Aggregates | RideAnalytics
+| AnalyticsRepository | Aggregates | RevenueAnalytics
+| AnalyticsRepository | Aggregates | UserAnalytics
+| RideAnalytics       | Contains   | AnalyticsRecord (1..*)
+| RevenueAnalytics    | Contains   | AnalyticsRecord (1..*)
+| UserAnalytics       | Contains   | AnalyticsRecord (1..*)
+| ReportsController   | Uses       | AnalyticsRepository
+| AnalyticsController | Uses       | AnalyticsRepository
+|===
+
+Architectural Rationale::
+
+The Analytics subsystem follows a repository-centred design:
+
+. Controllers remain independent from analytics storage details.
+. `AnalyticsRepository` acts as a single access point for analytical
+  data.
+. Domain-specific analytics objects (`RideAnalytics`,
+  `RevenueAnalytics`, `UserAnalytics`) separate concerns.
+. `AnalyticsRecord` provides a reusable structure for storing metrics.
+. The design supports future extension with additional analytics
+  domains without modifying existing controllers.
+
+Quality Goals Supported::
+* *Maintainability* – clear separation between controllers and data
+  storage.
+* *Scalability* – new analytics categories can be added easily.
+* *Reusability* – the common `AnalyticsRecord` structure is reused
+  across all analytical domains.
+* *Modifiability* – analytics calculations can evolve independently
+  from the API layer.
