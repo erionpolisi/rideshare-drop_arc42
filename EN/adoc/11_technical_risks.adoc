@@ -36,85 +36,38 @@ release cycle.
 | ID | Risk | Impact | Mitigation
 
 | R1
-| Vendor lock-in to Firebase / GCP (ADR-4, ADR-5)
-| A change of cloud provider or messaging vendor would require
-re-platforming of authentication, real-time data and push.
-| Encapsulate Firebase usage behind narrow ports in the backend; keep
-the option to swap Firestore for another real-time database without
-touching the bounded contexts.
+| Battery and data consumption of live tracking on driver devices
+| Drivers may disable the app or uninstall it, breaking the matching process.
+| Tune the update frequency of the Realtime Service; fall back to lower-frequency updates on slow networks.
 
 | R2
-| Vendor lock-in to Stripe Connect (ADR-3)
-| If Stripe changes terms or becomes unavailable for the region,
-charges, payouts and commission split are blocked.
-| Isolate Stripe in the dedicated Payment Service; integration goes
-through a single adapter so a second processor can be plugged in.
-
-| R3
-| Market saturation and competition from established ride-sharing
-providers
-| Slow user adoption may prevent reaching the volume that justifies
-extracting microservices from the monolith.
-| Modular monolith (ADR-2) keeps operational cost low while user base
-grows; extraction is deferred until load justifies it.
-
-| R4
-| Regulatory changes for ride-sharing in operating regions
-| Local regulations may restrict operation or require new compliance
-features at short notice.
-| Keep regulatory rules (driver verification, fare caps, reporting)
-behind dedicated services / configuration so they can be adjusted
-per region without touching core flows.
-
-| R5
-| GDPR / DSGVO non-compliance (constraint OC1)
-| Fines and reputational damage; possible suspension of operation in
-the EU.
-| Data minimisation, EU-region data residency, account-deletion flow,
-regular privacy review (chapter 8).
-
-| R6
-| Battery and data consumption of live tracking on driver devices
-| Drivers may disable the app or uninstall it, breaking the matching
-process.
-| Tune the update frequency of the Realtime Service; fall back to
-lower-frequency updates on slow networks.
-
-| R7
 | External map / routing provider outage or rate-limit hit
 | Search and booking degrade for all users.
-| Circuit Breaker + Retry-with-Backoff (chapter 8); short-term cache
-of recent routes; fail fast with RFC 7807 error so the app can show
+| Circuit Breaker + Retry-with-Backoff; short-term cache of recent routes; fail fast with RFC 7807 error so the app can show
 a clear message.
 
-| R8
+| R3
 | Driver-verification provider unavailable
 | New drivers cannot be onboarded.
-| Verification can fall back to a manual in-house process (constraint
-OC6 / chapter 3) so onboarding continues.
+| Verification can fall back to a manual in-house process so onboarding continues.
 |===
 
-=== Accepted Technical Debts
+=== Technical Debts
 
 [cols="1,2,3", options="header"]
 |===
 | ID | Debt | Plan
 
 | D1
-| Monolith deploys the Analytics context together with the operational
-contexts.
-| Acceptable until reporting load impacts operational latency; extract
-Analytics first when that happens (the seam is already in place,
-chapter 5).
+| Monolith deploys the Analytics context together with the operational contexts.
+| Acceptable until reporting load impacts operational latency; extract Analytics first when that happens.
 
 | D2
 | No multi-region active/active deployment.
-| Sufficient for the initial Austrian rollout. Revisit when the first
-country outside the EU is added.
+| Sufficient for the initial Austrian rollout. Revisit when the first country outside the EU is added.
 
 | D3
 | Manual approval step between `staging` and `prod` in CI/CD.
-| Kept on purpose while the team is small to avoid unattended bad
-deploys; revisit once automated end-to-end coverage is high enough to
+| Kept on purpose while the team is small to avoid unattended bad deploys; revisit once automated end-to-end coverage is high enough to
 trust full continuous deployment.
 |===
