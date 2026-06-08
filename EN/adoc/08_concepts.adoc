@@ -95,21 +95,6 @@ checked on every sensitive action.
 * *Payment data* – card data is *never* stored in Drop; only Stripe
   payment-processor tokens are persisted (constraint OC1, ADR-3).
 
-=== Data Protection (GDPR / DSGVO)
-
-Drop processes real-time location data, personal user data and
-financial data – all of which fall under GDPR.
-
-* *Lawful basis* – contract for ride processing, explicit consent for
-  optional analytics.
-* *Data minimisation* – location traces are stored only for the
-  duration needed to complete and bill the ride, then aggregated.
-* *Right to erasure* – an account-deletion flow removes personal data
-  and anonymises historical ride records that must be kept for
-  bookkeeping.
-* *Data residency* – Cloud SQL and Firestore are configured in EU
-  regions.
-
 === Testing
 
 The system follows a *Test-Driven Development* (TDD) approach. Tests
@@ -138,19 +123,3 @@ Every commit triggers the CI/CD pipeline:
 
 Infrastructure is provisioned as code so that `dev`, `staging` and
 `prod` stay in sync.
-
-=== Logging, Monitoring and Tracing
-
-All services emit structured JSON logs to GCP Cloud Logging. Metrics
-are scraped into Cloud Monitoring and visualised in Grafana
-dashboards. Each request carries a correlation ID that is propagated
-through the event bus so that one ride can be traced end-to-end across
-the monolith, the Payment Service and the Realtime Service.
-
-=== Internationalisation
-
-Drop ships in German and English (constraint TC3). User-facing strings
-are externalised into resource bundles in the app; the backend returns
-machine-readable error codes that the app translates locally. New
-languages can be added without code changes once translations are
-provided.

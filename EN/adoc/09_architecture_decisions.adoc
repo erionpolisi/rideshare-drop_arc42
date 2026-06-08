@@ -107,9 +107,9 @@ stream to many concurrent rides with low latency. Building an own
 socket layer is too costly for a small team.
 
 Decision::
-Stream driver location and ride status through a *managed real-time
-messaging service* (Firebase Firestore listeners and Firebase Cloud
-Messaging) instead of operating our own socket infrastructure.
+Stream driver location and ride status through a managed real-time
+messaging service (Firebase Firestore listeners and Firebase Cloud
+Messaging) instead of operating our own socket infrastructure. External communication with microservices such as PaymentAPI are done through Kafka events.
 
 Consequences::
 * (+) Low-latency updates, managed scaling and connection handling.
