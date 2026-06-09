@@ -71,13 +71,16 @@ characteristics (ADR-4).
 
 Decision::
 Start with a *modular monolith* with clear bounded contexts (Identity,
-Rides, Matching, RideHistory, Notifications, Analytics) deployed as one
-unit. Keep the seams so that high-load contexts can later be extracted
-into separate microservices. The system is explicitly understood as a
-*transitional architecture*: bounded contexts that already have
-technical reasons to be separate are extracted *now* (Payments,
-Tracking); the others stay in the monolith until measurable load,
-release-cadence or team-topology pressure justifies their extraction.
+Rides, RideHistory, Notifications, Analytics) deployed as one unit.
+Matching, Booking, Fare Estimation, Driver Assignment and Ride
+Lifecycle live *inside* the Rides bounded context (see
+<<section-building-block-view>>, Level 3). Keep the seams so that
+high-load contexts can later be extracted into separate microservices.
+The system is explicitly understood as a *transitional architecture*:
+bounded contexts that already have technical reasons to be separate
+are extracted *now* (Payments, Tracking); the others stay in the
+monolith until measurable load, release-cadence or team-topology
+pressure justifies their extraction.
 
 Consequences::
 * (+) Simple deployment and operations for the still-coupled contexts,
