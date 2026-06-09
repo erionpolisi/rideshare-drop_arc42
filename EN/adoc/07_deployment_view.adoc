@@ -61,11 +61,11 @@ Overview::
 | Node / Environment | Hosted Software
 
 | End-user devices (Android, iOS)
-| Drop Mobile App (Flutter)
+| Flutter Client
 
 | GCP – Cloud Run / GKE
-| Backend (Spring Boot monolith), Payment Service,
-Realtime/Location Service
+| Backend Monolith (Spring Boot), Payment Service,
+Tracking Service
 
 | GCP – Cloud SQL (PostgreSQL)
 | Operational data of the monolith (Identity, Rides, Matching,
@@ -92,6 +92,22 @@ Firebase Cloud Messaging (push)
 | Driver background checks
 |===
 
+Region and Network Topology::
+* Primary GCP region: *`europe-west3` (Frankfurt)* with multi-zone
+  deployment across `europe-west3-a`, `-b`, `-c` for zonal redundancy.
+  Personal data therefore stays inside the EU (constraint OC1 / GDPR,
+  ADR-5).
+* One VPC per environment (`dev`, `staging`, `prod`) with two
+  subnets: a *public* subnet for the HTTPS load balancer and Stripe
+  webhook receiver, and a *private* subnet for all stateful services
+  (Cloud SQL, internal Pub/Sub/Kafka, internal service-to-service
+  calls over VPC-native networking).
+* Egress to external providers (Stripe, Map & Routing, Verification)
+  goes through Cloud NAT so outbound IPs are stable and can be
+  allow-listed by the partner.
+* Secrets (Stripe API keys, Firebase Admin credentials, JWT signing
+  keys) are stored in GCP Secret Manager and mounted at startup.
+
 Quality and/or Performance Features::
 * *Scalability* – the backend, the Payment Service and the
   Realtime/Location Service are stateless and run behind a managed
@@ -106,55 +122,66 @@ Quality and/or Performance Features::
 
 Mapping of Building Blocks to Infrastructure::
 
-[cols="1,2", options="header"]
+[cols="1,2,1", options="header"]
 |===
-| Building Block (chapter 5) | Infrastructure Node
+| Building Block (chapter 5) | Infrastructure Node | Typical instances in `prod`
 
-| Mobile App
+| Flutter Client
 | End-user device (Android / iOS)
+| n/a
 
-| Backend (modular monolith)
-| Cloud Run / GKE service `drop-backend`
+| Backend Monolith
+| Cloud Run service `drop-backend`
+| 2 – 10 (autoscaled on CPU/RPS)
 
 | Payment Service
-| Cloud Run / GKE service `drop-payments`
+| Cloud Run service `drop-payments`
+| 2 – 4
 
-| Realtime / Location Service
-| Cloud Run / GKE service `drop-realtime` + Firestore + FCM
+| Tracking Service
+| Cloud Run service `drop-tracking` + Firestore + FCM
+| 2 – 6
 
-| Analytics Repository
+| Analytics (AnalyticsRepository)
 | Cloud SQL schema `analytics` accessed by the monolith
+| 1 Cloud SQL primary + 1 read replica
 
 | Identity provider
 | Firebase Authentication
+| managed
 
 | Event bus
 | GCP Pub/Sub or managed Kafka
+| managed
 
 | Map & Routing
 | External provider (HTTPS)
+| external
 
 | Payment provider
 | Stripe Connect (HTTPS + webhooks)
+| external
 |===
 
 === Infrastructure Level 2
 
-==== Mobile App
+==== Flutter Client
 
 The Flutter app is distributed through the Apple App Store and the
 Google Play Store. It bundles a thin Dart networking layer that talks
-to the Backend over HTTPS, a Firebase SDK for authentication, push and
-Firestore listeners, and native bridges for background GPS.
+to the Backend Monolith over HTTPS, a Firebase SDK for authentication,
+push and Firestore listeners, and native bridges for background GPS.
 
-==== Backend (Monolith)
+==== Backend Monolith
 
 The Spring Boot monolith is packaged as a container image. A typical
 production deployment runs at least two instances behind the load
-balancer to survive a single-instance outage. Each instance is
-stateless – session state lives in the client JWT and in Firestore.
-The instances share a Cloud SQL database for persistent data and
-publish/consume events on the internal event bus.
+balancer to survive a single-instance outage and autoscales up to
+ten instances on CPU and request count. Each instance is stateless –
+session state lives in the client JWT and in Firestore. The instances
+share a Cloud SQL database (regional, multi-zone, with one read
+replica) for persistent data and publish/consume events on the
+internal event bus.
 
 ==== Payment Service
 
@@ -163,9 +190,9 @@ exposes a narrow internal REST API to the monolith, calls Stripe
 Connect over HTTPS, and receives Stripe webhooks on a dedicated
 public endpoint that verifies the Stripe signature header.
 
-==== Realtime / Location Service
+==== Tracking Service
 
-The Realtime Service is intentionally thin: most of the heavy lifting
+The Tracking Service is intentionally thin: most of the heavy lifting
 is done by Firestore (real-time database) and FCM (push). The service
 owns the schema and access rules of the ride / location documents and
 fans out internal events when relevant state changes happen.
