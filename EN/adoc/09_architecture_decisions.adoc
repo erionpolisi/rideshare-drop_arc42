@@ -58,27 +58,41 @@ Consequences::
   for maps and background location.
 * (–) Some overhead for very heavy real-time map rendering.
 
-=== ADR-2: Modular Monolith with Bounded Contexts
+=== ADR-2: Modular Monolith with Bounded Contexts and Gradual Microservice Extraction
 
 Context::
 Scalability for a large number of users and rides is a non-functional
 requirement, yet the team is small and the principles *KISS* and
-*YAGNI* warn against premature distribution.
+*YAGNI* warn against premature distribution. At the same time, two
+bounded contexts have unusual non-functional requirements that already
+justify their own deployment unit: Payments must keep PCI scope small
+(ADR-3) and Tracking has very different scaling and connection-handling
+characteristics (ADR-4).
 
 Decision::
 Start with a *modular monolith* with clear bounded contexts (Identity,
-Matching, Rides, Payments, Analytics) deployed as one unit. Keep the
-seams so that high-load contexts can later be extracted into separate
-microservices.
+Rides, Matching, RideHistory, Notifications, Analytics) deployed as one
+unit. Keep the seams so that high-load contexts can later be extracted
+into separate microservices. The system is explicitly understood as a
+*transitional architecture*: bounded contexts that already have
+technical reasons to be separate are extracted *now* (Payments,
+Tracking); the others stay in the monolith until measurable load,
+release-cadence or team-topology pressure justifies their extraction.
 
 Consequences::
-* (+) Simple deployment and operations, fast development, easy
-  debugging, low infrastructure cost.
+* (+) Simple deployment and operations for the still-coupled contexts,
+  fast development, easy debugging, low infrastructure cost.
 * (+) Bounded contexts are ready for extraction once load justifies
-  it.
-* (–) Requires discipline to keep boundaries clean.
-* (–) Coarse-grained scaling at first; extraction work later when
-  load grows.
+  it; two are already extracted, proving the seams work.
+* (+) Hybrid model lets the team learn microservice operations on a
+  small surface (Payments, Tracking) before extracting more.
+* (–) Requires discipline to keep boundaries clean inside the
+  monolith.
+* (–) Coarse-grained scaling for the contexts still inside the
+  monolith; extraction work later when load grows.
+* (–) Two operational models in parallel (monolith + microservices)
+  increases the variety of deployment, monitoring and incident
+  patterns the team must master.
 
 === ADR-3: Use Stripe Connect for Payments
 
@@ -117,3 +131,63 @@ Consequences::
 * (–) Per-message / per-connection cost.
 * (–) Vendor lock-in; update frequency must be tuned to balance
   battery life and data use.
+
+=== ADR-5: Google Cloud Platform as Hosting Provider
+
+Context::
+Drop needs a cloud provider for the backend, the extracted
+microservices, the operational database, monitoring and logging.
+Firebase (Authentication, Firestore, FCM) was already selected as a
+backing service in ADR-4. The team is small and wants to avoid the
+operational overhead of running its own Kubernetes clusters across
+multiple providers.
+
+Decision::
+Host the backend, the Payment Service, the Tracking Service, the
+relational database (Cloud SQL / PostgreSQL) and the observability
+stack on *Google Cloud Platform (GCP)*. Use *Cloud Run* for stateless
+workloads and *GKE* only where Cloud Run's limits are reached.
+Primary region is `europe-west` to keep personal data inside the EU
+(constraint OC1 / GDPR).
+
+Consequences::
+* (+) Firebase is native to GCP – lower latency, single billing,
+  single IAM model.
+* (+) Cloud Run scales stateless services from zero, which fits the
+  early growth phase and keeps cost low.
+* (+) European region keeps GDPR data residency requirements
+  straightforward.
+* (–) Vendor lock-in to GCP for the operational stack.
+* (–) Some advanced networking features (e.g. multi-region
+  active/active) require GKE rather than Cloud Run; revisit if needed
+  (see technical debt D2).
+
+=== ADR-6: Apache Kafka as Internal Event Bus
+
+Context::
+Bounded contexts inside the monolith and the extracted microservices
+must exchange domain events (`RideCompleted`, `PaymentSettled`,
+`UserRegistered`, …) asynchronously, without direct coupling. The bus
+must survive consumer downtime (events kept until consumed) and allow
+later replay for new consumers such as Analytics.
+
+Decision::
+Use *Apache Kafka* as the internal event bus. On GCP this is either
+run as a managed Kafka offering (e.g. Confluent Cloud on GCP) or, for
+cost reasons during the early phase, replaced 1:1 by *Google Cloud
+Pub/Sub*, which exposes the same publish/subscribe semantics. The
+application code abstracts over the broker through a thin
+`EventPublisher` / `EventSubscriber` interface so that the concrete
+broker can be swapped without touching domain code.
+
+Consequences::
+* (+) Decouples bounded contexts and extracted microservices; events
+  are durable and replayable.
+* (+) Enables future consumers (Analytics, new microservices) to be
+  added without touching producers.
+* (+) Abstraction layer keeps the choice between managed Kafka and
+  Pub/Sub reversible.
+* (–) Operating Kafka in-house is non-trivial; the managed variant
+  costs more.
+* (–) Event-schema evolution and idempotent consumers require extra
+  discipline.
