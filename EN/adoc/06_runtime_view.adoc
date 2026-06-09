@@ -50,7 +50,6 @@ image::../images/06_booking.png[Book a Ride Runtime View]
 Trigger:: A passenger requests a ride from the mobile app.
  
 Flow::
-=======
 . *Rides* asks *Locations* for the available drivers.
 . *Locations* queries the *Map & Routing Provider*,
   receives the list of nearby drivers and returns it to *Rides* as the
@@ -70,7 +69,6 @@ image::../images/06_payment.png[Ride Completion and Payment Runtime View]
 Trigger:: The driver marks the ride as completed.
 
 Flow::
-=======
 . *Rides* updates the ride status in the *Database* and receives
   "ride status updated".
 . *Rides* calculates the fare (internal step).

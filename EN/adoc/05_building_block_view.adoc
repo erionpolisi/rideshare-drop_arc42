@@ -119,7 +119,7 @@ the bus).
 
 | Analytics
 | Consumes domain events (`RideCompleted`, `PaymentSettled`,
-`UserRegistered`) and aggregates business KPIs. Detailed at Level 3.
+`UserRegistered`) and aggregates business KPIs.
 
 | Event Bus (Apache Kafka)
 | Asynchronous event backbone decoupling the modules and the
