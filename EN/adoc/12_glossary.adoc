@@ -44,16 +44,11 @@ significant architectural decision and its rationale (chapter 9).
 | Internal role for operating the Drop platform; manages users,
 reviews reports and oversees operations.
 
-| AnalyticsRecord
-| Generic key/value record persisted by the *AnalyticsRepository*
-to store an individual metric (chapter 5, Level 3 – Analytics).
-
 | Backend Monolith
 | The Spring Boot modular monolith that exposes Drop’s REST API and
-contains the bounded contexts Identity, Rides (with Matching),
-Notifications, RideHistory and Analytics. The bounded contexts
-Payments and Tracking have already been extracted into their own
-microservices (ADR-2).
+contains the bounded contexts Identity, Rides, Notifications,
+RideHistory and Analytics. Payments and Tracking have been extracted
+into their own microservices (ADR-2).
 
 | Bounded Context
 | Cohesive area of the domain with its own model, owned by exactly
@@ -77,7 +72,7 @@ product name *Drop*).
 
 | FCM
 | Firebase Cloud Messaging. Managed push notification service used by
-the Tracking Service and the Notifications module (chapter 7).
+the *Notifications* module (chapter 7).
 
 | Firebase
 | Backend-as-a-service from Google used for authentication, the
@@ -108,6 +103,11 @@ user ID and role, transported in an HttpOnly/Secure cookie
 | Internal event bus used for domain events between bounded contexts
 (ADR-6).
 
+| Map & Routing Provider
+| External service (Google Maps & Routing API) that returns distance,
+ETA and route geometry; accessed exclusively through the *Tracking
+Service* (chapter 3, ADR-4).
+
 | Modular Monolith
 | Single deployable backend organised into independent modules
 (bounded contexts) with no direct cross-module calls (ADR-2).
@@ -125,7 +125,8 @@ Connect for charges, payouts and the commission split (ADR-3).
 
 | Tracking Service
 | Microservice extracted from the monolith, responsible for streaming
-ride and driver-location updates via Firestore and FCM (ADR-4).
+ride and driver-location updates via *Firestore* and encapsulating the
+Map & Routing Provider (ADR-4).
 
 | Ride
 | One trip between a pickup and a destination, with one passenger
@@ -135,6 +136,11 @@ ride and driver-location updates via Firestore and FCM (ADR-4).
 | RFC 7807 (Problem Details)
 | Standard format for HTTP error responses used by all REST APIs of
 Drop (chapter 8).
+
+| Retry with Exponential Backoff
+| Resilience pattern for transient errors: retry the call with
+doubling wait times and a jitter; combined with idempotency keys to
+avoid duplicates (chapter 8).
 
 | Stripe Connect
 | Marketplace payment platform used by Drop to handle charges, driver
