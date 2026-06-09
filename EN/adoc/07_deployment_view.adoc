@@ -43,7 +43,7 @@ See https://docs.arc42.org/section-7/[Deployment View] in the arc42 documentatio
 endif::arc42help[]
 
 === Infrastructure Level 1
-
+image::../images/07_deployment_view.png["Deployment view Level 1"]
 Motivation::
 Drop is operated as a cloud-native application on Google Cloud
 Platform (GCP). GCP was chosen because Firebase – which we use for
