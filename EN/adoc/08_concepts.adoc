@@ -123,3 +123,38 @@ Every commit triggers the CI/CD pipeline:
 
 Infrastructure is provisioned as code so that `dev`, `staging` and
 `prod` stay in sync.
+
+=== Persistence
+
+Drop uses a *polyglot persistence* approach: each data class is stored
+where its access pattern fits best, but the choice is made centrally
+so that the pattern is consistent across all bounded contexts.
+
+* *Cloud SQL (PostgreSQL)* – relational store for transactional,
+  consistency-critical data: identities, ride records, payment
+  ledger, `AnalyticsRecord` entries. One regional Cloud SQL instance
+  per environment (multi-zone, with one read replica in `prod`).
+* *Firestore* – real-time, document store for live data that the
+  apps must observe through listeners: current driver locations,
+  live ride status. Strong eventual-consistency is acceptable here.
+* *In-memory caches* – per-instance only; nothing that must survive a
+  restart goes into a cache.
+
+Cross-cutting rules:
+
+* *Ownership* – every table / collection has exactly one owning
+  bounded context. Other contexts read only through the owner's API
+  or through domain events; no direct cross-context SQL joins.
+* *Schema migrations* – versioned, forward-only migrations run on
+  application startup (Flyway). Every migration must be additive and
+  backwards-compatible during one release cycle so that rolling
+  deploys never break a running instance.
+* *Backups* – Cloud SQL automated daily snapshots with 30-day
+  retention; Firestore export to Cloud Storage on a daily schedule.
+  Restore is exercised at least once per release cycle.
+* *Encryption at rest* – enabled on Cloud SQL and Firestore;
+  application-level encryption for free-text fields that may contain
+  personal data (constraint OC1 / GDPR).
+* *Data retention* – ride and payment records are retained for the
+  legally required period; live location data in Firestore is
+  deleted at most 24 hours after the ride completes.
