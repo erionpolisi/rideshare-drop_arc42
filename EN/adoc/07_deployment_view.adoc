@@ -43,146 +43,58 @@ See https://docs.arc42.org/section-7/[Deployment View] in the arc42 documentatio
 endif::arc42help[]
 
 === Infrastructure Level 1
-
+image::../images/07_deployment_view.png["Deployment view Level 1"]
 Motivation::
-Drop is operated as a cloud-native application on Google Cloud
-Platform (GCP). GCP was chosen because Firebase – which we use for
-authentication, real-time database and push notifications – is native
-to GCP, which keeps latency and operational overhead low.
-
-The mobile apps run on the end users' devices; everything else runs in
-GCP. Stripe and the Map & Routing Provider are reached over the public
-Internet as managed third-party services.
-
-Overview::
-
-[cols="1,3", options="header"]
-|===
-| Node / Environment | Hosted Software
-
-| End-user devices (Android, iOS)
-| Drop Mobile App (Flutter)
-
-| GCP – Cloud Run / GKE
-| Backend (Spring Boot monolith), Payment Service,
-Realtime/Location Service
-
-| GCP – Cloud SQL (PostgreSQL)
-| Operational data of the monolith (Identity, Rides, Matching,
-Payments façade, Analytics Repository)
-
-| GCP – Firebase
-| Firebase Authentication, Firestore (real-time ride/location data),
-Firebase Cloud Messaging (push)
-
-| GCP – Pub/Sub or self-managed Kafka
-| Internal domain event bus (e.g. `RideCompleted`,
-`PaymentSettled`, `UserRegistered`)
-
-| GCP – Cloud Logging / Cloud Monitoring / Grafana
-| Logs, metrics, dashboards, alerting
-
-| External – Stripe Connect
-| Charges, driver payouts, commission split
-
-| External – Map & Routing Provider
-| Geocoding, routing, ETA
-
-| External – Identity / Licence Verification (optional)
-| Driver background checks
-|===
+The infrastructure strategy for Drop (RideShare) is rooted in a highly responsive, cloud-native architecture powered by the Google Cloud Platform (GCP). Because our application relies heavily on Firebase for secure authentication and push notifications, anchoring our backend within the Google ecosystem creates an unparalleled, low-latency synergy. 
+Furthermore, we've designed the system to maximize our team's agility. By running the mobile applications directly on end-user devices and strategically delegating highly specialized domains to industry leaders—relying on Google Maps for complex routing, Stripe for secure, PCI-compliant payment processing, and a managed Apache Kafka service for high-throughput messaging—we eliminate the need to reinvent the wheel or operate complex socket infrastructures. This approach allows us to focus our resources entirely on delivering a robust, scalable, and exceptional ride-sharing experience.
 
 Quality and/or Performance Features::
-* *Scalability* – the backend, the Payment Service and the
-  Realtime/Location Service are stateless and run behind a managed
-  load balancer; they scale horizontally on CPU and request count.
-* *Availability* – managed services (Firestore, Cloud SQL, Stripe)
-  remove most of the operational burden from the small team.
-* *Security* – TLS for every external channel, encryption at rest for
-  Cloud SQL and Firestore, secrets in GCP Secret Manager, JWTs in
-  HttpOnly/Secure cookies.
-* *Cost* – pay-per-use services keep infrastructure cost low while the
-  user base is still growing (constraint: tight budget, small team).
+* **Scalability:** The GCP-hosted Spring Boot backend and Payment microservices are containerized and stateless. They run behind a managed load balancer on Cloud Run (or GKE) and scale horizontally. Real-time driver tracking is offloaded to Firestore, preventing socket connection bottlenecks on the main backend.
+* **Resilience:** Cross-cutting resilience patterns (Circuit Breaker, Retry-with-Backoff) protect the backend when communicating with external dependencies. Asynchronous communication via Apache Kafka ensures that domain events (like ride completions) and live tracking streams are resilient, buffered, and not lost during traffic spikes.
+* **Security:** Sensitive actions are explicitly authorized. User identities and JWTs are securely managed by Firebase, while sensitive payment processing is offloaded entirely to Stripe, keeping the GCP backend out of PCI-DSS scope.
 
 Mapping of Building Blocks to Infrastructure::
 
 [cols="1,2", options="header"]
 |===
-| Building Block (chapter 5) | Infrastructure Node
+| Building Block | Infrastructure Node & Technology
 
 | Mobile App
-| End-user device (Android / iOS)
+| End-user device (iOS/Android) built with Flutter/Dart.
 
-| Backend (modular monolith)
-| Cloud Run / GKE service `drop-backend`
+| Backend API (Monolith)
+| GCP Cloud Run / GKE; built with Spring Boot.
 
 | Payment Service
-| Cloud Run / GKE service `drop-payments`
+| GCP Cloud Run / GKE independent container.
 
-| Realtime / Location Service
-| Cloud Run / GKE service `drop-realtime` + Firestore + FCM
+| Relational Database
+| GCP Cloud SQL (PostgreSQL) storing operational data (Identity, Rides, Analytics).
 
-| Analytics Repository
-| Cloud SQL schema `analytics` accessed by the monolith
+| Real-time Data & Identity
+| Firebase Authentication and Firestore.
 
-| Identity provider
-| Firebase Authentication
-
-| Event bus
-| GCP Pub/Sub or managed Kafka
+| Event Bus / Live Tracking
+| Managed Apache Kafka cluster (e.g., Confluent Cloud on GCP) for internal domain events and tracking streams.
 
 | Map & Routing
-| External provider (HTTPS)
+| External Google Maps / GPS Services accessed via HTTPS.
 
-| Payment provider
-| Stripe Connect (HTTPS + webhooks)
+| Payment Provider
+| External Stripe Connect accessed via HTTPS and webhooks.
 |===
 
 === Infrastructure Level 2
 
 ==== Mobile App
+The cross-platform Flutter application runs natively on the user's iOS or Android device. It bundles the UI, a networking layer for REST API calls to the GCP backend, and specific Firebase SDKs for authentication, push notifications, and live ride tracking. Native OS bridges are utilized strictly when unavoidable, such as for background GPS location processing.
 
-The Flutter app is distributed through the Apple App Store and the
-Google Play Store. It bundles a thin Dart networking layer that talks
-to the Backend over HTTPS, a Firebase SDK for authentication, push and
-Firestore listeners, and native bridges for background GPS.
+==== Backend API (Modular Monolith)
+The Spring Boot application serves as the primary gateway for business logic. It manages bounded contexts (such as Rides and Matching) as a modular monolith. It is deployed as a stateless Docker container on GCP Cloud Run, allowing for rapid horizontal scaling based on HTTP traffic. State is managed externally via Firebase (for sessions) and Cloud SQL (for persistent relational records).
 
-==== Backend (Monolith)
+==== Event Bus (Apache Kafka)
+Apache Kafka acts as the high-throughput nervous system of the architecture. It is utilized for robust, event-driven communication between the monolith and extracted microservices (like Payments), as well as streaming live communication data. When an event occurs (e.g., `RideCompleted`), the monolith publishes a message to a Kafka topic, which the Payment service consumes asynchronously to initiate the billing process without blocking the main thread. Utilizing a managed Kafka service keeps operational overhead low for the small team.
 
-The Spring Boot monolith is packaged as a container image. A typical
-production deployment runs at least two instances behind the load
-balancer to survive a single-instance outage. Each instance is
-stateless – session state lives in the client JWT and in Firestore.
-The instances share a Cloud SQL database for persistent data and
-publish/consume events on the internal event bus.
-
-==== Payment Service
-
-A dedicated service is used to keep PCI scope small. The service
-exposes a narrow internal REST API to the monolith, calls Stripe
-Connect over HTTPS, and receives Stripe webhooks on a dedicated
-public endpoint that verifies the Stripe signature header.
-
-==== Realtime / Location Service
-
-The Realtime Service is intentionally thin: most of the heavy lifting
-is done by Firestore (real-time database) and FCM (push). The service
-owns the schema and access rules of the ride / location documents and
-fans out internal events when relevant state changes happen.
-
-==== Environments
-
-Three environments are operated with identical infrastructure
-definitions:
-
-[cols="1,3", options="header"]
-|===
-| Environment | Purpose
-
-| `dev`     | Continuous deployment from `main` for the development team.
-| `staging` | Pre-production verification, integration tests, UAT.
-| `prod`    | End-user traffic.
-|===
-
-Infrastructure is provisioned as code (e.g. Terraform) so that the
-three environments stay aligned.
+==== Third-Party Integrations
+* **Stripe Connect:** Handled securely by the dedicated Payment Service to process charges and distribute driver payouts, tokenizing all card data to bypass local compliance burdens.
+* **Firebase:** Used in tandem with Kafka as a managed real-time messaging layer. Driver locations and ride updates can be pushed to Firestore, providing low-latency streaming to the passenger's app without requiring the team to build and scale a custom WebSockets infrastructure.
