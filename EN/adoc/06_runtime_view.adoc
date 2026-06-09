@@ -43,47 +43,39 @@ the use cases that touch several building blocks, cross trust boundaries
 or exercise the resilience and security concepts described in
 chapter 8.
 
-=== Scenario 1 – Search and Book a Ride
+=== Scenario 1 – Book a Ride
 
-Trigger:: A passenger searches for a ride and books one of the
-results.
+image::../images/06_booking.png[Book a Ride Runtime View]
 
+Trigger:: A passenger requests a ride from the mobile app.
+ 
 Flow::
-. *Mobile App* requests a ride by sending pickup location, destination and desired time to the   *Backend*.
-. *Matching* queries the *Map & Routing Provider* for distance and
-  ETA and returns a list of nearby available drivers.
-. The passenger selects a ride; *Rides* creates a `Ride` in state
-  `REQUESTED` and publishes a `RideRequested` event.
-. *Notifications* pushes the request to the selected driver via
-  Firebase Cloud Messaging.
-
-Notable aspects::
-* All calls to the Map & Routing Provider go through a Circuit Breaker
-  (chapter 8); on open circuit the request fails fast with an   RFC 7807 error.
-* The booking call is idempotent (the client sends an idempotency
-  key) so a retry on a flaky network does not create duplicate rides.
-
-
+. *Rides* asks *Locations* for the available drivers.
+. *Locations* queries the *Map & Routing Provider*,
+  receives the list of nearby drivers and returns it to *Rides* as the
+  list of available drivers.
+. *Rides* selects the nearest driver and asks *Notifications* to
+  notify the nearest driver; *Notifications* pushes the ride request to the
+  *App (Driver)*.
+. The driver accepts and *App (Driver)* responds directly back to *Rides*.
+. *Rides* persists the ride in the *Database*.
+. *Rides* triggers location sharing through *Locations*, which shares the Passenger's location with the *Driver*.
+. *Rides* asks *Notifications* to confirm the booking to the passenger.
+ 
 === Scenario 2 – Ride Completion and Payment
+
+image::../images/06_payment.png[Ride Completion and Payment Runtime View]
 
 Trigger:: The driver marks the ride as completed.
 
 Flow::
-. *Rides* transitions the `Ride` to `COMPLETED` and publishes
-  `RideCompleted`.
-. The *Payments* façade triggers the *Payment Service*, which calls
-  Stripe Connect to charge the passenger, pay out the driver and
-  retain the commission.
-. Stripe confirms via webhook; the *Payment Service* publishes
-  `PaymentSettled`.
-. *Notifications* sends a receipt to the passenger and a payout
-  notice to the driver.
-. *Analytics* consumes `RideCompleted` and `PaymentSettled` to update
-  `RideAnalytics` and `RevenueAnalytics`.
-
-Notable aspects::
-* No card data ever touches Drop – only Stripe tokens are stored.
-* Payment calls are idempotent; on network failure they are retried
-  with exponential backoff.
-* If Stripe is unavailable, the ride is still marked completed and
-  the charge is queued for later settlement.
+. *Rides* updates the ride status in the *Database* and receives
+  "ride status updated".
+. *Rides* calculates the fare (internal step).
+. *Rides* asks *Payments* to initiate the payment; *Payments* calls the
+  *PaymentAPI* microservice (Payment Processor) and receives confirmation that the payment has been processed.
+. *Payments* stores the transaction in the *Database* and returns confirmation to *Rides*.
+. *Rides* sends a `RideCompleted` event to *Analytics*.
+. *Rides* asks *Notifications* to push the closing messages: the passenger
+  receives a receipt and a prompt to rate the driver, and the driver
+  receives a confirmation and a prompt to rate the passenger.
