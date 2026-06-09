@@ -49,17 +49,27 @@ Trigger:: A passenger searches for a ride and books one of the
 results.
 
 Flow::
-. *Mobile App* requests a ride by sending pickup location, destination and desired time to the   *Backend*.
-. *Matching* queries the *Map & Routing Provider* for distance and
-  ETA and returns a list of nearby available drivers.
+. *Flutter Client* (see <<section-building-block-view>>) requests a
+  ride by sending pickup location, destination and desired time to
+  the *Backend Monolith*.
+. *Matching* (see <<section-building-block-view>>, Level 3 – Rides)
+  queries the *Map & Routing Provider* (see
+  <<section-context-and-scope>>) for distance and ETA and returns a
+  list of nearby available drivers.
 . The passenger selects a ride; *Rides* creates a `Ride` in state
-  `REQUESTED` and publishes a `RideRequested` event.
+  `REQUESTED` and publishes a `RideRequested` event on the *Event
+  Bus* (Apache Kafka).
 . *Notifications* pushes the request to the selected driver via
   Firebase Cloud Messaging.
 
 Notable aspects::
-* All calls to the Map & Routing Provider go through a Circuit Breaker
-  (chapter 8); on open circuit the request fails fast with an   RFC 7807 error.
+* All calls to the Map & Routing Provider go through a *Circuit
+  Breaker* (see <<section-concepts>>); on open circuit the request
+  fails fast with an RFC 7807 error.
+* The booking call is idempotent (the client sends an *Idempotency
+  Key*, see <<section-concepts>>) so a retry on a flaky network does
+  not create duplicate rides (covered by quality scenario QS-2 in
+  <<section-quality-scenarios>>).
 * The booking call is idempotent (the client sends an idempotency
   key) so a retry on a flaky network does not create duplicate rides.
 
@@ -69,21 +79,27 @@ Notable aspects::
 Trigger:: The driver marks the ride as completed.
 
 Flow::
-. *Rides* transitions the `Ride` to `COMPLETED` and publishes
-  `RideCompleted`.
-. The *Payments* façade triggers the *Payment Service*, which calls
-  Stripe Connect to charge the passenger, pay out the driver and
-  retain the commission.
+. *Rides* (see <<section-building-block-view>>, Level 3 – Rides)
+  transitions the `Ride` to `COMPLETED` and publishes `RideCompleted`
+  on the *Event Bus*.
+. The *Payments* façade inside the monolith forwards the request to
+  the extracted *Payment Service* (see <<section-building-block-view>>,
+  Level 1), which calls *Stripe Connect* (see
+  <<section-context-and-scope>>) to charge the passenger, pay out
+  the driver and retain the commission.
 . Stripe confirms via webhook; the *Payment Service* publishes
-  `PaymentSettled`.
+  `PaymentSettled` on the *Event Bus*.
 . *Notifications* sends a receipt to the passenger and a payout
   notice to the driver.
-. *Analytics* consumes `RideCompleted` and `PaymentSettled` to update
-  `RideAnalytics` and `RevenueAnalytics`.
+. *Analytics* (see <<section-building-block-view>>, Level 3 –
+  Analytics) consumes `RideCompleted` and `PaymentSettled` and
+  stores the resulting metrics through its `AnalyticsRepository`.
 
 Notable aspects::
-* No card data ever touches Drop – only Stripe tokens are stored.
+* No card data ever touches Drop – only Stripe tokens are stored
+  (see *Security and Authorisation* in <<section-concepts>>, ADR-3).
 * Payment calls are idempotent; on network failure they are retried
-  with exponential backoff.
+  with *Retry with Exponential Backoff* (see <<section-concepts>>).
 * If Stripe is unavailable, the ride is still marked completed and
-  the charge is queued for later settlement.
+  the charge is queued for later settlement (covered by quality
+  scenario QS-3 in <<section-quality-scenarios>>).
