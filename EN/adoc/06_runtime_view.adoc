@@ -43,28 +43,49 @@ the use cases that touch several building blocks, cross trust boundaries
 or exercise the resilience and security concepts described in
 chapter 8.
 
-=== Scenario 1 – Book a Ride
+=== Scenario 1 – Payment Failure
+
+image::../images/06_payment_declined.png[Payment Failure Runtime View]
+
+Trigger:: The payment processor declines the passenger's card at the end of a ride.
+
+Flow::
+. *Rides* asks *Payment Service* to charge the passenger for the completed ride.
+. *Payment Service* forwards the charge request to the external *Stripe Connect*
+  microservice (Payment Processor).
+. *Stripe Connect* rejects the charge and returns a `CARD_DECLINED` error to
+  *Payment Service*.
+. *Payment Service* logs the failed transaction in the *Database* with reason
+  code `CARD_DECLINED` and returns a `paymentFailed` signal to *Rides*.
+. *Rides* asks *Notifications* to alert the passenger that the payment failed
+  and that they must update their payment method.
+. *Notifications* pushes the failure message to *App (Passenger)*.
+. *Rides* schedules a retry attempt (15-minute delay) and marks the ride as
+  `PAYMENT_PENDING` in the *Database* until the payment is resolved.
+
+=== Scenario 2 – Book a Ride
 
 image::../images/06_booking.png[Book a Ride Runtime View]
 
 Trigger:: A passenger requests a ride from the mobile app.
  
 Flow::
-. *Rides* asks *Locations* for the available drivers.
-. *Locations* queries the *Map & Routing Provider*,
+. *Rides* asks *Tracking Service* for the available drivers.
+. *Tracking Service* queries the *Map & Routing Provider*,
   receives the list of nearby drivers and returns it to *Rides* as the
   list of available drivers.
 . *Rides* selects the nearest driver and asks *Notifications* to
   notify the nearest driver; *Notifications* pushes the ride request to the
   *App (Driver)*.
+. Should the driver decline the request, *Rides* would select the next nearest driver and repeat the notification step until a driver accepts or the list of available drivers is exhausted.  
 . The driver accepts and *App (Driver)* responds directly back to *Rides*.
-. *Rides* persists the ride in the *Database*.
-. *Rides* triggers location sharing through *Locations*, which shares the Passenger's location with the *Driver*.
+. *Rides* persists the ride in the *RideHistory*.
+. *Rides* triggers location sharing through *Tracking Service*, which shares the Passenger's location with the *Driver*.
 . *Rides* asks *Notifications* to confirm the booking to the passenger.
  
-=== Scenario 2 – Ride Completion and Payment
+=== Scenario 3 – Ride Completion and Successful Payment
 
-image::../images/06_payment.png[Ride Completion and Payment Runtime View]
+image::../images/06_payment.png[Ride Completion and Successful Payment Runtime View]
 
 Trigger:: The driver marks the ride as completed.
 
@@ -72,9 +93,9 @@ Flow::
 . *Rides* updates the ride status in the *Database* and receives
   "ride status updated".
 . *Rides* calculates the fare (internal step).
-. *Rides* asks *Payments* to initiate the payment; *Payments* calls the
-  *PaymentAPI* microservice (Payment Processor) and receives confirmation that the payment has been processed.
-. *Payments* stores the transaction in the *Database* and returns confirmation to *Rides*.
+. *Rides* asks *Payment Service* to initiate the payment; *Payment Service* calls the
+  *Stripe Connect* microservice (Payment Processor) and receives confirmation that the payment has been processed.
+. *Payment Service* stores the transaction in the *Database* and returns confirmation to *Rides*.
 . *Rides* sends a `RideCompleted` event to *Analytics*.
 . *Rides* asks *Notifications* to push the closing messages: the passenger
   receives a receipt and a prompt to rate the driver, and the driver
