@@ -42,7 +42,7 @@ endif::arc42help[]
 
 === Whitebox Overall System (Level 1)
 
-image::images/05-level1-whitebox.png[Whitebox Drop (Level 1)]
+image::05_level1.png[Whitebox Drop (Level 1)]
 
 *Rationale:* Drop is split by deployment unit — a Flutter *Mobile Client*
 on the user's device and a Spring Boot *Backend* holding all business
@@ -67,7 +67,7 @@ Level 2.
 
 === Backend — Whitebox (Level 2)
 
-image::images/05-level2-backend.png[Backend Whitebox (Level 2)]
+image::05_level2_backend.png[Backend Whitebox (Level 2)]
 
 *Rationale:* The backend is a *modular monolith*: a functional
 decomposition into modules whose boundaries match the services it may
@@ -111,7 +111,7 @@ live position to clients through Firestore.
 
 === Ride Management — Whitebox (Level 3)
 
-image::images/05-level3-ride-management.png[Ride Management Whitebox (Level 3)]
+image::05_level3_analytics.png[Ride Management Whitebox (Level 3)]
 
 *Rationale:* Ride Management follows the lifecycle of a ride, from the
 booking request through driver matching and assignment to the tracked,
