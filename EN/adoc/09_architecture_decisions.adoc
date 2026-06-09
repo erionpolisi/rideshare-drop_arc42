@@ -159,11 +159,15 @@ Primary region is `europe-west` to keep personal data inside the EU
 Consequences::
 * (+) Firebase is native to GCP – lower latency, single billing,
   single IAM model.
-* (+) Cloud Run scales stateless services from zero, which fits the
-  early growth phase and keeps cost low.
+* (+) Cloud Run scales stateless services from zero in `dev` and
+  `staging`, which keeps non-production cost low.
 * (+) European region keeps GDPR data residency requirements
   straightforward.
 * (–) Vendor lock-in to GCP for the operational stack.
+* (–) JVM cold starts on Cloud Run are incompatible with the
+  P95-latency SLO, so `prod` revisions run with `min-instances=2`
+  and startup CPU boost (see chapter 7); this raises the prod cost
+  baseline compared with pure scale-from-zero.
 * (–) Some advanced networking features (e.g. multi-region
   active/active) require GKE rather than Cloud Run; revisit if needed
   (see technical debt D2).

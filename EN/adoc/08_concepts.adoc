@@ -106,6 +106,49 @@ checked on every sensitive action.
   Incoming Stripe webhooks are verified by signature and deduplicated
   by Stripe `event.id` to make webhook processing idempotent.
 
+=== Mobile App Security
+
+The Flutter client enforces the following controls in addition to the
+backend rules above:
+
+* *Secure token storage* – Firebase ID and refresh tokens are stored
+  in the platform secure storage (iOS Keychain, Android Keystore);
+  never written to logs or shared preferences.
+* *TLS certificate pinning* – the public-key pin of the backend
+  certificate is shipped with the app to prevent MITM via a rogue CA.
+* *App attestation* – Play Integrity (Android) and App Attest (iOS)
+  tokens are sent on sensitive calls (registration, payment) so the
+  backend can reject requests from tampered or emulated clients.
+* *Jailbreak / root detection* – the app refuses to start sensitive
+  flows on a rooted or jailbroken device.
+* *Deep links* – only an explicit allow-list of `https://` universal
+  links is honoured; custom-scheme deep links are ignored.
+* *Logging hygiene* – no PII, tokens or location data are written to
+  device logs or crash reports.
+
+=== Observability and Incident Response
+
+Drop is operated against the SLOs defined in chapter 10. Observability
+and on-call are designed so that an SLO breach is detected and routed
+to a human before it becomes user-visible at scale.
+
+* *Telemetry* – application logs to Cloud Logging (structured JSON,
+  request-id correlated), metrics to Cloud Monitoring, distributed
+  traces via OpenTelemetry to Cloud Trace across the Backend Monolith,
+  Payment Service and Tracking Service.
+* *SLI / SLO alerts* – burn-rate alerts in Cloud Monitoring for each
+  SLO in chapter 10 (availability, P95 booking latency, tracking
+  freshness). Multi-window (1 h / 6 h) burn-rate policy.
+* *Paging* – alerts fire into PagerDuty with a SEV-1 / SEV-2 / SEV-3
+  classification; SEV-1 (user-facing outage, payment outage, data
+  breach) pages the on-call engineer 24/7, SEV-2 within business
+  hours, SEV-3 creates a ticket.
+* *Runbooks* – every alert references a runbook in the repository
+  (`/docs/runbooks/<alert-id>.md`) covering triage, mitigation and
+  escalation steps.
+* *Postmortems* – every SEV-1 and SEV-2 incident produces a blameless
+  postmortem within five working days, tracked in the same repository.
+
 === Testing
 
 The system follows a *Test-Driven Development* (TDD) approach. Tests

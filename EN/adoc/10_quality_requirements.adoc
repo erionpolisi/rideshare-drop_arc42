@@ -31,6 +31,8 @@ The top-level quality goals (Security, Functional Suitability,
 Scalability, Sustainability) are already listed in section 1.2 and are
 not repeated here. The tree below refines them, adds the most relevant
 secondary qualities and links them to the scenarios in section 10.2.
+The concrete service-level objectives that operations is measured
+against are listed in section 10.3.
 
 [cols="1,2,3", options="header"]
 |===
@@ -154,3 +156,44 @@ the ride first. Across one calendar month, *at least 30 %* of
 completed rides in cities with an EV-driver share above 20 % are
 served by an EV. Compliance is verified by an Analytics report on
 `RideCompleted` events.
+
+=== Service Level Objectives
+
+The SLOs below are the contract between development and operations.
+They are measured in Cloud Monitoring and reviewed every release
+cycle.
+
+[cols="2,2,2,3", options="header"]
+|===
+| SLI | SLO target | Measurement window | Notes
+
+| API availability (Backend Monolith, Payment Service, Tracking Service)
+| 99.9 % successful responses (HTTP < 500)
+| 30-day rolling
+| Per service; burn-rate alerting at 1 h / 6 h windows.
+
+| Booking end-to-end latency
+| P95 < 2 s, P99 < 4 s
+| 30-day rolling
+| From `POST /rides` to booking confirmation; aligns with QS-4.
+
+| Live-tracking freshness
+| P95 location update delivered to passenger app < 3 s
+| 30-day rolling
+| Measured client-side; aligns with QS-4.
+
+| Payment success
+| \u2265 99 % of completion-time charges settled within 5 minutes
+| 30-day rolling
+| Excludes user-side `CARD_DECLINED`; aligns with QS-3.
+
+| Recovery Point Objective (data loss)
+| RPO \u2264 1 h
+| Per incident
+| Covered by Cloud SQL backups and Firestore exports (chapter 7).
+
+| Recovery Time Objective (regional failover)
+| RTO \u2264 4 h
+| Per incident
+| Manual restore into the secondary region (chapter 7).
+|===

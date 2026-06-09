@@ -182,10 +182,13 @@ The Spring Boot monolith is packaged as a container image. A typical
 production deployment runs at least two instances behind the load
 balancer to survive a single-instance outage and autoscales up to
 ten instances on CPU and request count. Each instance is stateless –
-session state lives in the client JWT and in Firestore. The instances
-share a Cloud SQL database (regional, multi-zone, with one read
-replica) for persistent data and publish/consume events on the
-internal event bus.
+session state lives in the Firebase ID token and in Firestore. The
+instances share a Cloud SQL database (regional, multi-zone, with one
+read replica) for persistent data and publish/consume events on the
+internal event bus. To keep the booking-latency SLO (see chapter 10),
+the `prod` revision is deployed with `min-instances=2` and startup CPU
+boost enabled so that JVM cold starts never appear on the user request
+path; `dev` and `staging` may scale to zero (reconciles ADR-5).
 
 ==== Payment Service
 
@@ -217,3 +220,24 @@ definitions:
 
 Infrastructure is provisioned as code (e.g. Terraform) so that the
 three environments stay aligned.
+
+==== Disaster Recovery
+
+Drop runs in a single primary region (`europe-west3`) with multi-zone
+redundancy, which covers zonal failures but not a regional outage
+(technical debt D2, risk R5). To bound the impact of a regional event,
+the following measures are in place:
+
+* *Cross-region backups* – Cloud SQL automated backups and Firestore
+  scheduled exports are replicated to a Cloud Storage bucket in
+  `europe-west4` with the same 30-day retention.
+* *Recovery objectives* – *RPO ≤ 1 h* (last successful backup /
+  export) and *RTO ≤ 4 h* for a full restore into `europe-west4`
+  using the Terraform definitions from the same repository.
+* *Failover* – today manual: re-apply the Terraform stack in the
+  secondary region, restore the latest Cloud SQL backup and Firestore
+  export, switch the DNS record of the global load balancer.
+  Automated multi-region active/active is tracked under D2.
+* *Drills* – a restore drill into an isolated project is executed at
+  least once per release cycle; the outcome is recorded with the
+  measured RPO and RTO.
