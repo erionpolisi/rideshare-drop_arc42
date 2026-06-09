@@ -125,9 +125,13 @@ ride lifecycle. Detailed at Level 3.
 
 | Notifications
 | Sends push notifications through *Firebase Cloud Messaging* (FCM).
-Triggered exclusively by domain events on the *Event Bus*
-(`RideRequested`, `RideAccepted`, `RideCompleted`, `PaymentSettled`,
-`PaymentFailed`).
+Exposes an internal REST endpoint that *Rides* calls (fire-and-forget,
+behind a Circuit Breaker, see <<section-concepts>>) to trigger
+user-facing pushes such as booking confirmation, driver offer and
+receipt. Additionally subscribes to `PaymentSettled` and
+`PaymentFailed` on the *Event Bus* so that payment-outcome
+notifications originating outside *Rides* are delivered
+asynchronously.
 
 | RideHistory
 | Stores and serves completed-ride records; consumes `RideCompleted`
