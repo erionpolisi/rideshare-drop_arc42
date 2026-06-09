@@ -31,25 +31,69 @@ release cycle.
 
 === Risks
 
-[cols="1,2,3,3", options="header"]
+Risks are evaluated with the standard *Probability × Impact* matrix
+inspired by ISO 31000:2018 and recommended by the iSAQB Foundation
+syllabus (LZ 9-3). Each axis uses three levels:
+
+[cols="1,2,2", options="header"]
 |===
-| ID | Risk | Impact | Mitigation
+| Level | Probability | Impact
+
+| Low (1)
+| Unlikely to occur within one release cycle.
+| Minor user impact, easy to recover, no data loss.
+
+| Medium (2)
+| Plausible during a release cycle.
+| Several users affected, manual recovery, no data loss.
+
+| High (3)
+| Expected to occur unless mitigated.
+| Outage of a critical feature, regulatory or financial impact.
+|===
+
+The *Score* is `Probability × Impact` and drives the priority:
+1 – 2 monitor, 3 – 4 plan mitigation, 6 – 9 mitigation is mandatory.
+
+[cols="1,3,1,1,1,4,4", options="header"]
+|===
+| ID | Risk | P | I | Score | Impact (details) | Mitigation
 
 | R1
 | Battery and data consumption of live tracking on driver devices
+| 3 | 2 | 6
 | Drivers may disable the app or uninstall it, breaking the matching process.
-| Tune the update frequency of the Realtime Service; fall back to lower-frequency updates on slow networks.
+| Tune the update frequency of the Tracking Service; fall back to lower-frequency updates on slow networks; expose a battery-saver mode.
 
 | R2
 | External map / routing provider outage or rate-limit hit
+| 2 | 3 | 6
 | Search and booking degrade for all users.
-| Circuit Breaker + Retry-with-Backoff; short-term cache of recent routes; fail fast with RFC 7807 error so the app can show
-a clear message.
+| Circuit Breaker + Retry-with-Backoff; short-term cache of recent routes; fail fast with RFC 7807 error so the app can show a clear message.
 
 | R3
 | Driver-verification provider unavailable
+| 2 | 2 | 4
 | New drivers cannot be onboarded.
 | Verification can fall back to a manual in-house process so onboarding continues.
+
+| R4
+| Stripe outage during peak hours
+| 1 | 3 | 3
+| Rides complete but receipts are delayed; refunds and payouts are queued.
+| Idempotent payment calls + retry; ride completion is decoupled from payment settlement (QS-3).
+
+| R5
+| Event-bus (Kafka / Pub/Sub) backlog when a consumer is down
+| 2 | 2 | 4
+| Analytics and Notifications lag behind by minutes to hours.
+| Bounded retention; alerting on consumer lag; consumers are idempotent so replays are safe.
+
+| R6
+| GDPR / DSGVO violation through over-retention of location data
+| 1 | 3 | 3
+| Regulatory fine, reputational damage, mandatory disclosure.
+| Hard 24-hour retention on Firestore live-location documents; quarterly audit of data-retention rules (constraint OC1).
 |===
 
 === Technical Debts
