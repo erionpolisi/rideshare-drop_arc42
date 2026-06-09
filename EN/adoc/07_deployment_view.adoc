@@ -109,8 +109,8 @@ Region and Network Topology::
   keys) are stored in GCP Secret Manager and mounted at startup.
 
 Quality and/or Performance Features::
-* *Scalability* – the backend, the Payment Service and the
-  Realtime/Location Service are stateless and run behind a managed
+* *Scalability* – the Backend Monolith, the Payment Service and the
+  Tracking Service are stateless and run behind a managed
   load balancer; they scale horizontally on CPU and request count.
 * *Availability* – managed services (Firestore, Cloud SQL, Stripe)
   remove most of the operational burden from the small team.
