@@ -31,49 +31,43 @@ release cycle.
 
 === Risks
 
-Risks are scored with *Probability × Impact* (each 1 – 3,
-iSAQB LZ 9-3 / ISO 31000); priority: 1 – 2 monitor, 3 – 4 plan
-mitigation, 6 – 9 mitigation mandatory.
-
-[cols="1,4,1,1,1,5", options="header"]
+[cols="1,2,3,3", options="header"]
 |===
-| ID | Risk | P | I | Score | Mitigation
+| ID | Risk | Impact | Mitigation
 
 | R1
 | Battery and data consumption of live tracking on driver devices
-  drives drivers to disable / uninstall the app and breaks matching.
-| 3 | 2 | 6
-| Tune update frequency in the Tracking Service, fall back to
-  low-frequency mode on slow networks, expose a battery-saver mode.
+| Drivers may disable the app or uninstall it, breaking the matching process.
+| Tune the update frequency of the Realtime Service; fall back to lower-frequency updates on slow networks.
 
 | R2
-| External map / routing provider outage or rate-limit hit degrades
-  search and booking for all users.
-| 2 | 3 | 6
-| Circuit Breaker + Retry-with-Backoff, short-term route cache,
-  RFC 7807 fail-fast so the app can show a clear message (QS-3).
+| External map / routing provider outage or rate-limit hit
+| Search and booking degrade for all users.
+| Circuit Breaker + Retry-with-Backoff; short-term cache of recent routes; fail fast with RFC 7807 error so the app can show
+a clear message.
 
 | R3
-| Event-bus backlog when a consumer is down causes Analytics and
-  Notifications to lag by minutes to hours.
-| 2 | 2 | 4
-| Bounded retention, alerting on consumer lag, idempotent consumers
-  so replays are safe.
-
-| R4
-| Stripe outage during peak hours delays receipts, refunds and
-  payouts.
-| 1 | 3 | 3
-| Idempotent payment calls + retry; ride completion is decoupled
-  from payment settlement (QS-3, ADR-3).
+| Driver-verification provider unavailable
+| New drivers cannot be onboarded.
+| Verification can fall back to a manual in-house process so onboarding continues.
 |===
 
 === Technical Debts
 
-* *D1 – Analytics still in the monolith.* Acceptable until reporting
-  load impacts operational latency; first extraction candidate.
-* *D2 – Single-region deployment.* Sufficient for the Austrian
-  rollout; revisit when the first non-EU country is added.
-* *D3 – Manual approval between `staging` and `prod`.* Kept on
-  purpose while the team is small; drop once end-to-end coverage is
-  high enough to trust full continuous deployment.
+[cols="1,2,3", options="header"]
+|===
+| ID | Debt | Plan
+
+| D1
+| Monolith deploys the Analytics context together with the operational contexts.
+| Acceptable until reporting load impacts operational latency; extract Analytics first when that happens.
+
+| D2
+| No multi-region active/active deployment.
+| Sufficient for the initial Austrian rollout. Revisit when the first country outside the EU is added.
+
+| D3
+| Manual approval step between `staging` and `prod` in CI/CD.
+| Kept on purpose while the team is small to avoid unattended bad deploys; revisit once automated end-to-end coverage is high enough to
+trust full continuous deployment.
+|===
