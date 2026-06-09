@@ -50,10 +50,11 @@ deployable monolith and is being incrementally split into microservices
 as load and team size grow (ADR-2). At the moment three server-side
 deployment units exist: the *Backend Monolith* (Spring Boot) holding
 the still-coupled bounded contexts, and the already-extracted
-*Payment Service* (ADR-3) and *Tracking Service* (ADR-4). External
-neighbouring systems (Firebase, Stripe Connect, Map & Routing Provider,
-Identity & Licence Verification) are described in
-<<section-context-and-scope>>.
+*Payment Service* (ADR-3) and *Tracking Service* (ADR-4). The three
+server-side units are integrated asynchronously through a shared
+*Event Bus* (Apache Kafka, ADR-6). External neighbouring systems
+(Firebase, Stripe Connect, Map & Routing Provider, Identity & Licence
+Verification) are described in <<section-context-and-scope>>.
 
 *Contained building blocks:*
 
@@ -67,16 +68,28 @@ talks to the Backend Monolith and Firebase (TC1).
 
 | Backend Monolith
 | Spring Boot modular monolith that exposes the REST API and holds the
-business logic of Identity, Rides, Matching, Notifications, RideHistory
-and Analytics. Detailed at Level 2.
+business logic of Identity, Rides, Notifications, RideHistory and
+Analytics. Publishes and consumes domain events on the *Event Bus*.
+Detailed at Level 2.
 
 | Payment Service
 | Microservice already extracted from the monolith. Integrates Stripe
-Connect for charges, payouts and the commission split (ADR-3).
+Connect for charges, payouts and the commission split (ADR-3) and
+publishes `PaymentSettled` / `PaymentFailed` events on the *Event
+Bus*.
 
 | Tracking Service
-| Microservice already extracted from the monolith. Streams driver
-locations and ride status to clients through Firestore and FCM (ADR-4).
+| Microservice already extracted from the monolith. Owns the
+high-frequency driver-location data and streams driver positions and
+ride-status updates to the *Flutter Client* through *Firestore*
+(ADR-4). Encapsulates the *Map & Routing Provider* (ETA, routing).
+Publishes location-related events on the *Event Bus*.
+
+| Event Bus (Apache Kafka)
+| Asynchronous integration backbone shared by the *Backend Monolith*,
+*Payment Service* and *Tracking Service*; carries the cross-context
+domain events (`RideRequested`, `RideAccepted`, `RideCompleted`,
+`PaymentSettled`, `PaymentFailed`, ...). See ADR-6.
 |===
 
 === Backend Monolith — Whitebox (Level 2)
@@ -86,11 +99,11 @@ image::05_level2_backend.png[Backend Monolith Whitebox (Level 2)]
 *Rationale:* The Backend Monolith is a *modular monolith*: a
 functional decomposition into bounded-context modules whose boundaries
 match the services it may later be split into (ADR-2). Modules
-communicate synchronously through the API Layer and asynchronously
-through a Kafka event bus, which keeps them decoupled and eases the
-planned microservice extraction. Payments and Tracking have already
-been extracted (see Level 1); the remaining modules are described
-below.
+communicate synchronously through the API Layer and asynchronously by
+publishing and consuming events on the *Event Bus* (see Level 1),
+which keeps them decoupled and eases the planned microservice
+extraction. Payments and Tracking have already been extracted (see
+Level 1); the remaining modules are described below.
 
 *Contained building blocks:*
 
@@ -107,23 +120,23 @@ modules.
 Authentication.
 
 | Rides
-| Ride search, matching, booking and ride lifecycle. Detailed at Level 3.
+| Ride booking, fare estimation, matching, driver assignment and
+ride lifecycle. Detailed at Level 3.
 
 | Notifications
-| Sends push notifications through Firebase Cloud Messaging (calls FCM
-directly for transactional messages and reacts to domain events from
-the bus).
+| Sends push notifications through *Firebase Cloud Messaging* (FCM).
+Triggered exclusively by domain events on the *Event Bus*
+(`RideRequested`, `RideAccepted`, `RideCompleted`, `PaymentSettled`,
+`PaymentFailed`).
 
 | RideHistory
-| Stores and serves completed-ride records.
+| Stores and serves completed-ride records; consumes `RideCompleted`
+from the Event Bus.
 
 | Analytics
 | Consumes domain events (`RideCompleted`, `PaymentSettled`,
-`UserRegistered`) and aggregates business KPIs.
-
-| Event Bus (Apache Kafka)
-| Asynchronous event backbone decoupling the modules and the
-extracted microservices.
+`PaymentFailed`, `UserRegistered`) from the Event Bus and aggregates
+business KPIs.
 |===
 
 === Level 3
@@ -138,9 +151,16 @@ ride-booking flow: receiving the request (Booking), pricing it
 the ride to a driver (Driver Assignment) and persisting the
 ride state during its lifetime (Ride Lifecycle). Booking is the
 orchestrator; the others are called in sequence or in response to
-driver actions. Ride Lifecycle owns the `Ride` entity and emits the
-domain events that other contexts (Notifications, Analytics,
-Payment Service) consume.
+driver actions. All location- and routing-related calls go through
+the *Tracking Service* (see <<section-building-block-view>>, Level 1) -
+Rides never talks to the *Map & Routing Provider* directly. Ride
+Lifecycle is the *only* emitter of domain events from Rides and
+owns the `Ride` entity; the events are consumed asynchronously by
+*Notifications*, *Analytics* and *RideHistory* via the Event Bus.
+The only synchronous outbound dependency of Rides is the call from
+Ride Lifecycle to the extracted *Payment Service* when a ride
+transitions to `COMPLETED`, because the charge confirmation is
+needed before the response is returned to the client.
 
 *Contained building blocks (blackboxes):*
 
@@ -155,21 +175,33 @@ confirmation. Idempotent on the client-supplied idempotency key
 (see <<section-concepts>>).
 
 | Fare Estimation
-| Calls the *Map & Routing Provider* (see
-<<section-context-and-scope>>) for distance and ETA and computes the
-fare. Stateless.
+| Computes the fare from distance and ETA. Distance and ETA are
+obtained from the *Tracking Service* (see <<section-building-block-view>>,
+Level 1), which encapsulates the call to the *Map & Routing
+Provider*. Stateless.
 
 | Matching
-| Finds nearby available drivers for a booking request. Reads driver
-availability through the Tracking Service.
+| Finds nearby available drivers for a booking request. Reads
+driver availability through the *Tracking Service*; ranks the
+candidates by ETA and proximity.
 
 | Driver Assignment
-| Offers the ride to candidate drivers in ranked order and handles
-their accept / decline responses within a configurable timeout.
+| Coordinator for the offer loop: takes the ranked candidate list
+from *Matching*, picks the next driver to offer, hands the offer to
+*Ride Lifecycle* (which then publishes `RideRequested` on the
+Event Bus, see below), waits for the driver's response within a
+configurable timeout and advances to the next candidate on decline
+or timeout. *Driver Assignment never pushes to the driver itself* -
+the push is delivered asynchronously by *Notifications* (FCM); the
+driver's reply arrives synchronously via the *API Layer* and is
+routed back here.
 
 | Ride Lifecycle
 | Owns the `Ride` aggregate, persists it and implements its state
 machine (`REQUESTED` → `ACCEPTED` → `IN_PROGRESS` → `COMPLETED` /
 `CANCELLED`). Publishes `RideRequested`, `RideAccepted`,
-`RideCompleted` and `RideCancelled` on the Event Bus.
+`RideCompleted` and `RideCancelled` on the Event Bus. On the
+`COMPLETED` transition it additionally calls the extracted
+*Payment Service* synchronously (REST) to charge the passenger,
+because the response to the client must contain the payment outcome.
 |===
