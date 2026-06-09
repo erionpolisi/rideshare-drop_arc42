@@ -43,38 +43,13 @@ the use cases that touch several building blocks, cross trust boundaries
 or exercise the resilience and security concepts described in
 chapter 8.
 
-=== Scenario 1 – User Registration
-
-Trigger:: A new passenger or driver opens the app and creates an
-account.
-
-Flow::
-. *Mobile App* collects profile data and submits it to the *Backend*
-  (REST/HTTPS).
-. *Identity* context validates the input, creates the user and assigns
-  the requested role (Passenger / Driver).
-. *Identity* delegates credential storage to the external identity
-  provider and receives a JWT.
-. The JWT is returned to the *Mobile App* and stored in an HttpOnly,
-  Secure cookie.
-. *Identity* publishes a `UserRegistered` event on Kafka.
-. *Analytics* consumes the event and updates `UserAnalytics`
-  (`activeUsers`).
-
-Notable aspects::
-* Authentication is delegated to the external identity provider – no
-  passwords are stored in Drop.
-* Account creation succeeds even if Analytics is down; the event is
-  processed asynchronously.
-
-=== Scenario 2 – Search and Book a Ride
+=== Scenario 1 – Search and Book a Ride
 
 Trigger:: A passenger searches for a ride and books one of the
 results.
 
 Flow::
-. *Mobile App* sends pickup, destination and desired time to the
-  *Backend*.
+. *Mobile App* requests a ride by sending pickup location, destination and desired time to the   *Backend*.
 . *Matching* queries the *Map & Routing Provider* for distance and
   ETA and returns a list of nearby available drivers.
 . The passenger selects a ride; *Rides* creates a `Ride` in state
@@ -84,51 +59,12 @@ Flow::
 
 Notable aspects::
 * All calls to the Map & Routing Provider go through a Circuit Breaker
-  (chapter 8); on open circuit the request fails fast with an
-  RFC 7807 error.
+  (chapter 8); on open circuit the request fails fast with an   RFC 7807 error.
 * The booking call is idempotent (the client sends an idempotency
   key) so a retry on a flaky network does not create duplicate rides.
 
-=== Scenario 3 – Driver Accepts or Declines
 
-Trigger:: The driver receives a ride request and reacts.
-
-Flow::
-. The driver’s *Mobile App* receives the push notification and shows
-  the request.
-. The driver accepts or declines; the response is sent to *Rides*.
-. On *accept*, the `Ride` transitions to `ACCEPTED` and a
-  `RideAccepted` event is published; the *Realtime Service* opens a
-  tracking channel for both apps.
-. On *decline*, *Matching* selects the next eligible driver and the
-  flow continues from Scenario 2, step 4.
-
-Notable aspects::
-* State transitions are guarded server-side; the client cannot push
-  the ride into an arbitrary state.
-* Timeouts on the driver side automatically trigger a decline so that
-  the request is re-dispatched.
-
-=== Scenario 4 – Live Tracking
-
-Trigger:: An accepted ride is in progress.
-
-Flow::
-. The driver app reads GPS coordinates and publishes them to the
-  *Realtime Service* (Firestore).
-. Both apps subscribe to the Firestore document of the ride and
-  receive position and status updates as a stream.
-. *Rides* listens to the same stream to update the canonical ride
-  state.
-
-Notable aspects::
-* The update frequency is tuned to balance battery, data use and
-  perceived latency.
-* If the realtime channel is interrupted, the apps fall back to
-  short-interval REST polling against *Rides* until the channel
-  recovers.
-
-=== Scenario 5 – Ride Completion and Payment
+=== Scenario 2 – Ride Completion and Payment
 
 Trigger:: The driver marks the ride as completed.
 
@@ -146,24 +82,8 @@ Flow::
   `RideAnalytics` and `RevenueAnalytics`.
 
 Notable aspects::
-* No card data ever touches Drop – only Stripe tokens are stored
-  (constraint OC1, ADR-3).
+* No card data ever touches Drop – only Stripe tokens are stored.
 * Payment calls are idempotent; on network failure they are retried
   with exponential backoff.
 * If Stripe is unavailable, the ride is still marked completed and
   the charge is queued for later settlement.
-
-=== Scenario 6 – View Ride History
-
-Trigger:: A user opens the history screen.
-
-Flow::
-. *Mobile App* calls *Rides* with the current JWT.
-. *Rides* returns the user’s own rides (filtered by user ID extracted
-  from the JWT) with date, route, fare and counterparty rating.
-
-Notable aspects::
-* Authorisation is enforced server-side; a user can only read their
-  own ride records.
-* The endpoint is paginated to keep response times stable as history
-  grows.

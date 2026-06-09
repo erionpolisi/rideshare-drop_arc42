@@ -40,223 +40,103 @@ See https://docs.arc42.org/section-5/[Building Block View] in the arc42 document
 ****
 endif::arc42help[]
 
-=== Whitebox Overall System
+=== Whitebox Overall System (Level 1)
 
-image::05_level1.png["Level 1 - Overall system: Mobile App, Backend (modular monolith), Payment Service, Realtime Service, Analytics Repository and external systems"]
+image::images/05-level1-whitebox.png[Whitebox Drop (Level 1)]
 
-Motivation::
-Drop is decomposed into a small number of coarse-grained building
-blocks. The split reflects the solution strategy (chapter 4): a single
-mobile codebase, a modular Spring Boot backend with clear bounded
-contexts, and a small number of selected microservices for capabilities
-that need independent scaling (payments, real-time location). External
-systems are kept as black boxes.
+*Rationale:* Drop is split by deployment unit — a Flutter *Mobile Client*
+on the user's device and a Spring Boot *Backend* holding all business
+logic. External capabilities the project does not build itself are
+reached as neighbours (see <<section-context-and-scope>>).
 
-Contained Building Blocks::
+*Contained building blocks:*
 
 [cols="1,3", options="header"]
 |===
-| Name | Responsibility
+| Building block | Description
 
-| Mobile App
-| Flutter-based client for Android and iOS. Renders the UI for
-passengers and drivers, calls the backend over HTTPS, and subscribes to
-real-time updates.
+| Mobile Client (Flutter)
+| App for passengers and drivers; renders the UI, reads device GPS, and
+talks to the Backend and Firebase (TC1).
 
-| Backend
-| Spring Boot modular monolith. Holds the core business logic and
-exposes the REST API for all use cases (registration, search, booking,
-ride lifecycle, history, reporting).
-
-| Payment Service
-| Microservice that integrates with Stripe Connect for charges, driver
-payouts and commission split. Isolates PCI scope from the monolith.
-
-| Realtime / Location Service
-| Microservice that streams driver location and ride status updates to
-clients via a managed pub/sub channel (Firestore / FCM).
-
-| Analytics Repository
-| Stores and aggregates operational, revenue and user metrics for
-reporting and business intelligence.
-
-| External Systems
-| Map & Routing Provider, Identity / Licence Verification, Stripe and
-Push Notification Service. Described as external actors in chapter 3.
+| Backend (Spring Boot)
+| Modular monolith that exposes a REST API and holds all business logic;
+integrates Firebase, the Map & Routing provider and Stripe. Detailed at
+Level 2.
 |===
 
-Important Interfaces::
+=== Backend — Whitebox (Level 2)
 
-* *Mobile App <-> Backend* – REST/HTTPS API for business operations;
-  JWT in an HttpOnly, Secure cookie (issued by the external identity
-  provider).
-* *Mobile App <-> Realtime Service* – Firestore listeners (WebSocket)
-  and Firebase Cloud Messaging for push.
-* *Backend <-> Payment Service* – Internal REST plus Stripe webhooks for
-  asynchronous settlement events.
-* *Backend <-> External Map / Identity providers* – HTTPS, guarded by
-  Circuit Breaker and Retry-with-Backoff (see chapter 8).
+image::images/05-level2-backend.png[Backend Whitebox (Level 2)]
 
-=== Level 2
+*Rationale:* The backend is a *modular monolith*: a functional
+decomposition into modules whose boundaries match the services it may
+later be split into. Modules communicate synchronously through the API
+layer and asynchronously through a Kafka event bus, which keeps them
+decoupled and eases the planned microservice extraction.
 
-This level zooms into the *Backend* monolith, which contains the bulk
-of the business logic. The monolith is structured as a set of bounded
-contexts. The boundaries are enforced in code (package boundaries, no
-direct cross-context calls) so that high-load contexts can later be
-extracted as microservices without rewriting them.
-
-==== White Box: Backend (Modular Monolith)
-
-image::05_level2_backend.png["Level 2 - Backend modular monolith with bounded contexts: Identity, Matching, Rides, Payments, Analytics, Notifications"]
-
-Motivation::
-Splitting the backend into bounded contexts gives the small team the
-simplicity of a single deployable unit while preserving clear seams for
-future extraction. Each context owns its data and exposes a controller
-layer for the REST API and an internal interface for the other
-contexts.
-
-Contained Building Blocks::
+*Contained building blocks:*
 
 [cols="1,3", options="header"]
 |===
-| Context | Responsibility
+| Building block | Description
 
-| Identity
-| User registration, profile management, role assignment
-(Passenger / Driver / Admin), session/JWT handling.
+| API Layer
+| REST facade; validates authentication and routes requests to the
+modules.
 
-| Matching
-| Search for nearby rides, driver assignment, dispatch of ride
-requests to drivers.
+| User & Identity
+| Registration, profiles and driver verification; integrates Firebase
+Authentication.
 
-| Rides
-| Ride lifecycle: booking, acceptance/decline, tracking handover to
-the Realtime Service, completion, history.
+| Ride Management
+| Ride search, matching, booking and ride lifecycle. Detailed at Level 3.
 
-| Payments
-| Façade in front of the Payment Service. Translates ride completion
-into a charge + payout + commission split through Stripe Connect.
+| Tracking
+| Ingests driver locations, publishes them to the event bus, and exposes
+live position to clients through Firestore.
 
-| Analytics
-| Collects domain events from the other contexts (ride completed,
-payment processed, user registered) and feeds them into the
-*Analytics Repository* (see Level 3).
+| Payment
+| Fare calculation, commission and driver payouts via Stripe.
 
-| Notifications
-| Sends transactional notifications (ride status, payouts) through the
-external Push Notification Service.
+| Notification
+| Sends push notifications through Firebase Cloud Messaging.
+
+| Ride History
+| Stores and serves completed-ride records.
+
+| Event Bus (Apache Kafka)
+| Asynchronous event backbone decoupling the modules.
 |===
 
-Important Interfaces::
+=== Ride Management — Whitebox (Level 3)
 
-* Each context exposes a REST controller package.
-* Cross-context communication uses domain events published on Kafka
-  (e.g. `RideCompleted`, `PaymentSettled`, `UserRegistered`) instead
-  of direct method calls. This keeps contexts decoupled and prepares
-  them for extraction.
+image::images/05-level3-ride-management.png[Ride Management Whitebox (Level 3)]
 
-=== Level 3
+*Rationale:* Ride Management follows the lifecycle of a ride, from the
+booking request through driver matching and assignment to the tracked,
+state-managed trip.
 
-This level zooms into the *Analytics* context from Level 2, because it
-has the most architecturally relevant internal structure: it is the
-only context organised around a dedicated repository with several
-domain-specific aggregates.
-
-==== White Box: Analytics Repository
-
-image::05_level3_analytics.png["Level 3 - Analytics Repository with ReportsController, AnalyticsController, RideAnalytics, RevenueAnalytics, UserAnalytics and AnalyticsRecord"]
-
-Purpose::
-The Analytics Repository is responsible for collecting, storing and
-providing analytical data related to ride activity, revenue generation
-and user engagement.
-
-Responsibilities::
-* Aggregate operational data
-* Store analytical metrics
-* Provide reports to controllers
-* Support business intelligence functions
-* Enable revenue and usage analysis
-
-Contained Building Blocks::
+*Contained building blocks:*
 
 [cols="1,3", options="header"]
 |===
-| Name | Responsibility
+| Building block | Description
 
-| AnalyticsRepository
-| Central repository that manages analytics data and provides access to
-the different analytical domains. Used by `ReportsController` and
-`AnalyticsController`. Persists analytics information, retrieves
-analytical metrics, aggregates data from analytical records and
-provides reporting data.
+| Booking
+| Creates and manages booking requests; orchestrates the other blocks.
 
-| ReportsController
-| Generates and serves business reports. Requests analytics data from
-`AnalyticsRepository`, generates reports and exposes report endpoints.
+| Fare Estimation
+| Calls the Map & Routing provider for distance and ETA and computes the
+fare.
 
-| AnalyticsController
-| Exposes analytics-related APIs. Serves analytics requests, retrieves
-metrics from `AnalyticsRepository` and delivers analytical summaries.
+| Ride Search & Matching
+| Finds nearby available drivers for a request.
 
-| RideAnalytics
-| Operational metrics. Attributes: `totalRides : int`,
-`averageDistance : double`, `averageDuration : double`. Tracks ride
-volume and calculates average trip distance and duration.
+| Driver Assignment
+| Offers rides to drivers and handles accept / decline.
 
-| RevenueAnalytics
-| Financial performance metrics. Attributes:
-`totalRevenue : double`, `averageFare : double`. Tracks platform
-revenue, calculates average fare values and supports financial
-reporting.
-
-| UserAnalytics
-| User activity metrics. Attributes: `activeUsers : int`,
-`completedRides : int`. Monitors active user base, measures user
-engagement and tracks ride completion statistics.
-
-| AnalyticsRecord
-| Generic analytical data record representing an individual metric.
-Attributes: `metricName : String`, `metricValue : double`. Stores
-metric values, supports aggregation and provides historical analytical
-data.
+| Ride Lifecycle
+| State machine for a ride (requested → accepted → in progress →
+completed / cancelled); emits ride events and persists state.
 |===
-
-Relationships::
-
-[cols="2,1,2", options="header"]
-|===
-| Source | Relationship | Target
-
-| AnalyticsRepository | Aggregates | RideAnalytics
-| AnalyticsRepository | Aggregates | RevenueAnalytics
-| AnalyticsRepository | Aggregates | UserAnalytics
-| RideAnalytics       | Contains   | AnalyticsRecord (1..*)
-| RevenueAnalytics    | Contains   | AnalyticsRecord (1..*)
-| UserAnalytics       | Contains   | AnalyticsRecord (1..*)
-| ReportsController   | Uses       | AnalyticsRepository
-| AnalyticsController | Uses       | AnalyticsRepository
-|===
-
-Architectural Rationale::
-
-The Analytics subsystem follows a repository-centred design:
-
-. Controllers remain independent from analytics storage details.
-. `AnalyticsRepository` acts as a single access point for analytical
-  data.
-. Domain-specific analytics objects (`RideAnalytics`,
-  `RevenueAnalytics`, `UserAnalytics`) separate concerns.
-. `AnalyticsRecord` provides a reusable structure for storing metrics.
-. The design supports future extension with additional analytics
-  domains without modifying existing controllers.
-
-Quality Goals Supported::
-* *Maintainability* – clear separation between controllers and data
-  storage.
-* *Scalability* – new analytics categories can be added easily.
-* *Reusability* – the common `AnalyticsRecord` structure is reused
-  across all analytical domains.
-* *Modifiability* – analytics calculations can evolve independently
-  from the API layer.

@@ -34,7 +34,7 @@ secondary qualities and links them to the scenarios in section 10.2.
 
 [cols="1,2,3", options="header"]
 |===
-| Top-level Quality (from 1.2) | Sub-quality | Refinement / Acceptance Criterion
+| Quality Category | Quality | Description 
 
 | Security
 | Confidentiality
@@ -57,11 +57,6 @@ the use cases in chapter 3.
 (Analytics, Notifications) are temporarily unavailable.
 
 | Scalability
-| Elasticity
-| Backend, Payment Service and Realtime Service scale horizontally
-without code changes.
-
-| Scalability
 | Real-time performance
 | Live tracking updates stay perceivably real-time even when the
 number of concurrent rides grows by an order of magnitude.
@@ -75,16 +70,6 @@ possible.
 | Eco-friendly fleet
 | Driver onboarding and matching support a preference for electric
 vehicles.
-
-| Maintainability (secondary)
-| Modularity
-| New analytics categories or new bounded contexts can be added
-without modifying existing controllers (see chapter 5, Level 3).
-
-| Usability (secondary)
-| Internationalisation
-| Full app and error-message coverage in German and English
-(constraint TC3).
 |===
 
 === Quality Scenarios
@@ -107,20 +92,7 @@ Acceptance Criterion::
 The backend rejects the request with HTTP 401 within 200 ms. No
 personal data or payment information is returned.
 
-==== QS-2 (Security) – Card data leak attempt
-
-Context::
-A misconfigured log statement accidentally includes the payment
-payload.
-
-Stimulus::
-A developer searches the production logs for a card number pattern.
-
-Acceptance Criterion::
-No raw card data is found, because card data is never sent to the Drop
-backend – only Stripe tokens (ADR-3).
-
-==== QS-3 (Functional Suitability) – Booking under flaky network
+==== QS-2 (Functional Suitability) – Booking under flaky network
 
 Context::
 A passenger books a ride from a train with intermittent connectivity.
@@ -131,7 +103,7 @@ The booking request is retried twice with the same idempotency key.
 Acceptance Criterion::
 Exactly one ride is created. The passenger is not charged twice.
 
-==== QS-4 (Functional Suitability) – Stripe outage
+==== QS-3 (Functional Suitability) – Stripe outage
 
 Context::
 Stripe is unavailable for 10 minutes during peak hours.
@@ -144,7 +116,7 @@ Rides are still marked completed; payments are queued and processed
 within 5 minutes after Stripe recovers; users see a clear message that
 the receipt will arrive shortly.
 
-==== QS-5 (Scalability) – Tenfold concurrent rides
+==== QS-4 (Scalability) – Tenfold concurrent rides
 
 Context::
 The user base grows by a factor of 10 over six months.
@@ -157,29 +129,3 @@ Acceptance Criterion::
 End-to-end booking latency (P95) stays under 2 s; live-tracking
 updates stay under 3 s perceived delay; no code changes are required
 to scale the backend.
-
-==== QS-6 (Scalability) – New analytics dimension
-
-Context::
-The business asks for a new "carbon saved" metric.
-
-Stimulus::
-A new analytics category must be added.
-
-Acceptance Criterion::
-The new metric can be added by extending the Analytics Repository
-(new aggregate + `AnalyticsRecord` instances) without modifying
-existing controllers (see chapter 5, Level 3).
-
-==== QS-7 (Sustainability) – EV preference
-
-Context::
-Several drivers in the matching radius are equally suitable.
-
-Stimulus::
-A passenger requests a ride and one of the candidate drivers uses an
-electric vehicle.
-
-Acceptance Criterion::
-The EV driver is ranked higher than non-EV drivers of equal
-suitability, all else being equal.
