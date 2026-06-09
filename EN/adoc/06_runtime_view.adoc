@@ -70,8 +70,6 @@ Notable aspects::
   Key*, see <<section-concepts>>) so a retry on a flaky network does
   not create duplicate rides (covered by quality scenario QS-2 in
   <<section-quality-scenarios>>).
-* The booking call is idempotent (the client sends an idempotency
-  key) so a retry on a flaky network does not create duplicate rides.
 
 
 === Scenario 2 – Ride Completion and Payment
