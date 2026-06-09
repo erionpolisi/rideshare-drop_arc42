@@ -31,87 +31,49 @@ release cycle.
 
 === Risks
 
-Risks are evaluated with the standard *Probability × Impact* matrix
-inspired by ISO 31000:2018 and recommended by the iSAQB Foundation
-syllabus (LZ 9-3). Each axis uses three levels:
+Risks are scored with *Probability × Impact* (each 1 – 3,
+iSAQB LZ 9-3 / ISO 31000); priority: 1 – 2 monitor, 3 – 4 plan
+mitigation, 6 – 9 mitigation mandatory.
 
-[cols="1,2,2", options="header"]
+[cols="1,4,1,1,1,5", options="header"]
 |===
-| Level | Probability | Impact
-
-| Low (1)
-| Unlikely to occur within one release cycle.
-| Minor user impact, easy to recover, no data loss.
-
-| Medium (2)
-| Plausible during a release cycle.
-| Several users affected, manual recovery, no data loss.
-
-| High (3)
-| Expected to occur unless mitigated.
-| Outage of a critical feature, regulatory or financial impact.
-|===
-
-The *Score* is `Probability × Impact` and drives the priority:
-1 – 2 monitor, 3 – 4 plan mitigation, 6 – 9 mitigation is mandatory.
-
-[cols="1,3,1,1,1,4,4", options="header"]
-|===
-| ID | Risk | P | I | Score | Impact (details) | Mitigation
+| ID | Risk | P | I | Score | Mitigation
 
 | R1
 | Battery and data consumption of live tracking on driver devices
+  drives drivers to disable / uninstall the app and breaks matching.
 | 3 | 2 | 6
-| Drivers may disable the app or uninstall it, breaking the matching process.
-| Tune the update frequency of the Tracking Service; fall back to lower-frequency updates on slow networks; expose a battery-saver mode.
+| Tune update frequency in the Tracking Service, fall back to
+  low-frequency mode on slow networks, expose a battery-saver mode.
 
 | R2
-| External map / routing provider outage or rate-limit hit
+| External map / routing provider outage or rate-limit hit degrades
+  search and booking for all users.
 | 2 | 3 | 6
-| Search and booking degrade for all users.
-| Circuit Breaker + Retry-with-Backoff; short-term cache of recent routes; fail fast with RFC 7807 error so the app can show a clear message.
+| Circuit Breaker + Retry-with-Backoff, short-term route cache,
+  RFC 7807 fail-fast so the app can show a clear message (QS-3).
 
 | R3
-| Driver-verification provider unavailable
+| Event-bus backlog when a consumer is down causes Analytics and
+  Notifications to lag by minutes to hours.
 | 2 | 2 | 4
-| New drivers cannot be onboarded.
-| Verification can fall back to a manual in-house process so onboarding continues.
+| Bounded retention, alerting on consumer lag, idempotent consumers
+  so replays are safe.
 
 | R4
-| Stripe outage during peak hours
+| Stripe outage during peak hours delays receipts, refunds and
+  payouts.
 | 1 | 3 | 3
-| Rides complete but receipts are delayed; refunds and payouts are queued.
-| Idempotent payment calls + retry; ride completion is decoupled from payment settlement (QS-3).
-
-| R5
-| Event-bus (Kafka / Pub/Sub) backlog when a consumer is down
-| 2 | 2 | 4
-| Analytics and Notifications lag behind by minutes to hours.
-| Bounded retention; alerting on consumer lag; consumers are idempotent so replays are safe.
-
-| R6
-| GDPR / DSGVO violation through over-retention of location data
-| 1 | 3 | 3
-| Regulatory fine, reputational damage, mandatory disclosure.
-| Hard 24-hour retention on Firestore live-location documents; quarterly audit of data-retention rules (constraint OC1).
+| Idempotent payment calls + retry; ride completion is decoupled
+  from payment settlement (QS-3, ADR-3).
 |===
 
 === Technical Debts
 
-[cols="1,2,3", options="header"]
-|===
-| ID | Debt | Plan
-
-| D1
-| Monolith deploys the Analytics context together with the operational contexts.
-| Acceptable until reporting load impacts operational latency; extract Analytics first when that happens.
-
-| D2
-| No multi-region active/active deployment.
-| Sufficient for the initial Austrian rollout. Revisit when the first country outside the EU is added.
-
-| D3
-| Manual approval step between `staging` and `prod` in CI/CD.
-| Kept on purpose while the team is small to avoid unattended bad deploys; revisit once automated end-to-end coverage is high enough to
-trust full continuous deployment.
-|===
+* *D1 – Analytics still in the monolith.* Acceptable until reporting
+  load impacts operational latency; first extraction candidate.
+* *D2 – Single-region deployment.* Sufficient for the Austrian
+  rollout; revisit when the first non-EU country is added.
+* *D3 – Manual approval between `staging` and `prod`.* Kept on
+  purpose while the team is small; drop once end-to-end coverage is
+  high enough to trust full continuous deployment.
