@@ -98,10 +98,14 @@ Context::
 A passenger books a ride from a train with intermittent connectivity.
 
 Stimulus::
-The booking request is retried twice with the same idempotency key.
+The booking request is retried up to three times with the same
+idempotency key within a 60-second window.
 
 Acceptance Criterion::
-Exactly one ride is created. The passenger is not charged twice.
+Exactly one ride is created (100 % of duplicate retries are
+deduplicated). In production, the rate of double bookings caused by
+client retries stays at *0 per month*, measured by Analytics on
+`RideRequested` events grouped by idempotency key.
 
 ==== QS-3 (Functional Suitability) – Stripe outage
 
@@ -129,3 +133,22 @@ Acceptance Criterion::
 End-to-end booking latency (P95) stays under 2 s; live-tracking
 updates stay under 3 s perceived delay; no code changes are required
 to scale the backend.
+
+==== QS-5 (Sustainability) – Electric-vehicle preference in matching
+
+Context::
+A passenger requests a ride in a city where at least one electric
+vehicle (EV) driver is available within a reasonable detour.
+
+Stimulus::
+The Matching module produces a candidate list for a booking request.
+Among the closest five candidates there is one EV driver whose ETA is
+at most 90 s longer than the closest non-EV driver and whose detour
+distance is at most 1.5 km longer.
+
+Acceptance Criterion::
+The EV driver is ranked first in the candidate list and is offered
+the ride first. Across one calendar month, *at least 30 %* of
+completed rides in cities with an EV-driver share above 20 % are
+served by an EV. Compliance is verified by an Analytics report on
+`RideCompleted` events.
