@@ -82,14 +82,16 @@ goals at architecture review time.
 
 Context::
 A user’s phone is stolen. The thief tries to call the Drop backend
-directly using a cookie captured from the device.
+directly using a Firebase ID token extracted from the device's secure
+storage.
 
 Stimulus::
-A request with a JWT that has been revoked because the user reported
-the loss.
+A request with a Firebase ID token whose underlying Firebase user
+session has been revoked because the user reported the loss.
 
 Acceptance Criterion::
-The backend rejects the request with HTTP 401 within 200 ms. No
+The backend rejects the request with HTTP 401 within 200 ms once the
+token's short TTL has elapsed or the revocation has propagated. No
 personal data or payment information is returned.
 
 ==== QS-2 (Functional Suitability) – Booking under flaky network

@@ -81,19 +81,30 @@ following patterns are applied at every outbound call:
 Authentication is required at every entry point; authorisation is
 checked on every sensitive action.
 
-* *Identity* – delegated to an external identity provider; Drop never
-  stores passwords.
-* *Tokens* – JWT (RFC 7519) issued by the identity provider, delivered
-  to the apps in an *HttpOnly, Secure* cookie. Tokens carry the user
-  ID and the role.
+* *Identity* – delegated to Firebase Authentication; Drop never stores
+  passwords.
+* *Tokens* – Firebase ID tokens (JWT, RFC 7519) issued by Firebase
+  Authentication. The mobile apps store the token in the platform's
+  secure storage (iOS Keychain / Android Keystore) and send it to the
+  backend as an `Authorization: Bearer` header. Tokens carry the user
+  ID and the role; refresh is handled by the Firebase SDK.
 * *Roles* – `PASSENGER`, `DRIVER`, `ADMIN`. Role checks are enforced in
   the backend, not in the app.
+* *Service-to-service* – calls between the Backend Monolith, the
+  Payment Service and the Tracking Service are authenticated with
+  Google-signed IAM ID tokens; Cloud Run ingress is restricted to
+  internal traffic and the load balancer.
+* *API edge* – the global HTTPS load balancer is fronted by Cloud Armor
+  for WAF rules, IP allow-listing of Stripe webhooks and per-endpoint
+  rate limiting to protect against abuse and DDoS.
 * *Transport* – TLS on every external channel (mobile ↔ backend,
   backend ↔ external services, webhooks).
 * *At rest* – encryption for Cloud SQL and Firestore; secrets in GCP
   Secret Manager.
 * *Payment data* – card data is *never* stored in Drop; only Stripe
   payment-processor tokens are persisted (constraint OC1, ADR-3).
+  Incoming Stripe webhooks are verified by signature and deduplicated
+  by Stripe `event.id` to make webhook processing idempotent.
 
 === Testing
 

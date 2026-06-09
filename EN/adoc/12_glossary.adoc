@@ -95,8 +95,9 @@ app (constraint TC1, ADR-1).
 without producing duplicates.
 
 | JWT
-| JSON Web Token (RFC 7519) issued by the identity provider; carries
-user ID and role, transported in an HttpOnly/Secure cookie
+| JSON Web Token (RFC 7519). In Drop, the concrete JWT used by the
+mobile apps is a Firebase ID token; it carries the user ID and role
+and is sent to the backend as an `Authorization: Bearer` header
 (chapter 8).
 
 | Kafka / Pub/Sub

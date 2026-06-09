@@ -53,11 +53,11 @@ The key functional features of Drop are:
 [options="header",cols="1,3"]
 |===
 |Priority|Feature
-|1|Registration as Customer or Driver
+|1|Registration as Passenger or Driver
 |2|Booking, searching, and managing rides
 |3|Real-time ride tracking
 |4|Secure in-app payment processing
-|5|Ride history for customers and drivers
+|5|Ride history for passengers and drivers
 |===
 
 === Quality Goals

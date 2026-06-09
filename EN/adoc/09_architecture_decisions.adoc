@@ -126,7 +126,10 @@ socket layer is too costly for a small team.
 Decision::
 Stream driver location and ride status through a managed real-time
 messaging service (Firebase Firestore listeners and Firebase Cloud
-Messaging) instead of operating our own socket infrastructure. External communication with microservices such as PaymentAPI are done through Kafka events.
+Messaging) instead of operating our own socket infrastructure.
+Asynchronous communication between bounded contexts and extracted
+microservices (including the Payment Service) is handled by domain
+events on the internal Kafka event bus (ADR-6).
 
 Consequences::
 * (+) Low-latency updates, managed scaling and connection handling.
@@ -175,22 +178,19 @@ must survive consumer downtime (events kept until consumed) and allow
 later replay for new consumers such as Analytics.
 
 Decision::
-Use *Apache Kafka* as the internal event bus. On GCP this is either
-run as a managed Kafka offering (e.g. Confluent Cloud on GCP) or, for
-cost reasons during the early phase, replaced 1:1 by *Google Cloud
-Pub/Sub*, which exposes the same publish/subscribe semantics. The
-application code abstracts over the broker through a thin
-`EventPublisher` / `EventSubscriber` interface so that the concrete
-broker can be swapped without touching domain code.
+Use *Apache Kafka* as the internal event bus, consumed as a managed
+service on GCP (e.g. Confluent Cloud on GCP) so the team does not
+operate brokers itself. The application code accesses the broker
+through a thin `EventPublisher` / `EventSubscriber` interface so that
+the concrete provider can be swapped later (e.g. for Google Cloud
+Pub/Sub) without touching domain code.
 
 Consequences::
 * (+) Decouples bounded contexts and extracted microservices; events
   are durable and replayable.
 * (+) Enables future consumers (Analytics, new microservices) to be
   added without touching producers.
-* (+) Abstraction layer keeps the choice between managed Kafka and
-  Pub/Sub reversible.
-* (–) Operating Kafka in-house is non-trivial; the managed variant
-  costs more.
+* (+) Abstraction layer keeps the choice of broker reversible.
+* (–) Managed Kafka has a per-message / throughput cost.
 * (–) Event-schema evolution and idempotent consumers require extra
   discipline.

@@ -127,11 +127,13 @@ determine location.
 _Backend (Spring Boot)_
 
 The backend is a Spring Boot application that holds the business logic
-and exposes a REST API over HTTPS. It uses Firebase as a backing service
-- Firestore for ride, profile and location data, and Firebase Cloud
-Messaging for push notifications; clients receive real-time changes such
-as live tracking through Firestore listeners. Maps, routing and payment
-are reached through external providers over the Internet.
+and exposes a REST API over HTTPS. Persistent ride, profile and payment
+data is stored in Cloud SQL (PostgreSQL); see chapters 7 and 8. Firebase
+is used as a backing service for live data and push: Firestore holds the
+short-lived driver-location and ride-status documents the apps subscribe
+to through Firestore listeners, and Firebase Cloud Messaging delivers
+push notifications. Maps, routing and payment are reached through
+external providers over the Internet.
 
 [cols="1,1", options="header"]
 |===
@@ -143,8 +145,8 @@ are reached through external providers over the Internet.
 | Business functions (booking, rides, history)
 | Spring Boot REST API over the Internet (HTTPS)
 
-| Ride data and real-time tracking
-| Firebase database (Firestore) over the Internet (HTTPS / WebSocket)
+| Live driver-location and ride-status updates
+| Firebase database (Firestore) over the Internet (HTTPS / gRPC streaming)
 
 | Push notifications
 | Firebase Cloud Messaging (FCM / APNs)

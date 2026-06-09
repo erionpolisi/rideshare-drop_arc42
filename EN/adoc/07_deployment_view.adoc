@@ -75,9 +75,9 @@ Payments façade, Analytics Repository)
 | Firebase Authentication, Firestore (real-time ride/location data),
 Firebase Cloud Messaging (push)
 
-| GCP – Pub/Sub or self-managed Kafka
+| GCP – managed Apache Kafka (e.g. Confluent Cloud on GCP)
 | Internal domain event bus (e.g. `RideCompleted`,
-`PaymentSettled`, `UserRegistered`)
+`PaymentSettled`, `UserRegistered`). See ADR-6.
 
 | GCP – Cloud Logging / Cloud Monitoring / Grafana
 | Logs, metrics, dashboards, alerting
@@ -95,8 +95,9 @@ Firebase Cloud Messaging (push)
 Region and Network Topology::
 * Primary GCP region: *`europe-west3` (Frankfurt)* with multi-zone
   deployment across `europe-west3-a`, `-b`, `-c` for zonal redundancy.
-  Personal data therefore stays inside the EU (constraint OC1 / GDPR,
-  ADR-5).
+  Firestore is provisioned in the EU multi-region (`eur3`) and Firebase
+  Authentication is configured for the `europe-west` tenant so that all
+  personal data stays inside the EU (constraint OC1 / GDPR, ADR-5).
 * One VPC per environment (`dev`, `staging`, `prod`) with two
   subnets: a *public* subnet for the HTTPS load balancer and Stripe
   webhook receiver, and a *private* subnet for all stateful services
@@ -115,8 +116,11 @@ Quality and/or Performance Features::
 * *Availability* – managed services (Firestore, Cloud SQL, Stripe)
   remove most of the operational burden from the small team.
 * *Security* – TLS for every external channel, encryption at rest for
-  Cloud SQL and Firestore, secrets in GCP Secret Manager, JWTs in
-  HttpOnly/Secure cookies.
+  Cloud SQL and Firestore, secrets in GCP Secret Manager, Firebase ID
+  tokens sent as `Authorization: Bearer` headers from the mobile apps,
+  service-to-service calls between Cloud Run services authenticated
+  with IAM-issued ID tokens, Cloud Armor in front of the HTTPS load
+  balancer for WAF rules and per-endpoint rate limiting.
 * *Cost* – pay-per-use services keep infrastructure cost low while the
   user base is still growing (constraint: tight budget, small team).
 
@@ -151,7 +155,7 @@ Mapping of Building Blocks to Infrastructure::
 | managed
 
 | Event bus
-| GCP Pub/Sub or managed Kafka
+| Managed Apache Kafka (Confluent Cloud on GCP)
 | managed
 
 | Map & Routing

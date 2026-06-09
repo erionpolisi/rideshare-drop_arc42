@@ -38,7 +38,7 @@ release cycle.
 | R1
 | Battery and data consumption of live tracking on driver devices
 | Drivers may disable the app or uninstall it, breaking the matching process.
-| Tune the update frequency of the Realtime Service; fall back to lower-frequency updates on slow networks.
+| Tune the update frequency of the Tracking Service; fall back to lower-frequency updates on slow networks.
 
 | R2
 | External map / routing provider outage or rate-limit hit
@@ -50,6 +50,26 @@ a clear message.
 | Driver-verification provider unavailable
 | New drivers cannot be onboarded.
 | Verification can fall back to a manual in-house process so onboarding continues.
+
+| R4
+| Breach of personal or location data (GDPR / OC1)
+| Regulatory fines, loss of user trust, possible service shutdown in the EU.
+| TLS in transit, encryption at rest, secrets in GCP Secret Manager, least-privilege IAM, Cloud Armor + rate limiting at the edge, Firestore security rules, audit logging of admin actions.
+
+| R5
+| Regional GCP outage (`europe-west3`)
+| Full service outage for all users; no automatic failover today (see D2).
+| Multi-zone deployment within the region; Cloud SQL automated backups and Firestore exports retained for cross-region restore; documented manual failover until D2 is resolved.
+
+| R6
+| Payment fraud or account takeover
+| Chargebacks, financial loss, reputational damage.
+| Firebase Authentication with revocation; per-endpoint rate limiting; Stripe Radar for transaction-level fraud scoring; alerts on anomalous booking/payment patterns.
+
+| R7
+| Outage of a critical managed dependency (Firebase, Stripe)
+| Authentication, real-time tracking or payments degrade or stop.
+| Circuit Breaker + Retry-with-Backoff; graceful degradation (rides still completable, receipts delayed – see QS-3); status-page monitoring with paging alerts.
 |===
 
 === Technical Debts
