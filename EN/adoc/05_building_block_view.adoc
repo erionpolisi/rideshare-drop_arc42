@@ -173,39 +173,3 @@ machine (`REQUESTED` → `ACCEPTED` → `IN_PROGRESS` → `COMPLETED` /
 `CANCELLED`). Publishes `RideRequested`, `RideAccepted`,
 `RideCompleted` and `RideCancelled` on the Event Bus.
 |===
-
-==== Analytics — Whitebox (Level 3)
-
-image::05_level3_rides.png[Analytics Whitebox (Level 3)]
-
-*Rationale:* Analytics consumes domain events from the bus and turns
-them into queryable business KPIs without ever touching the
-operational write path of Rides or Payments.
-
-*Contained building blocks (blackboxes):*
-
-[cols="1,3", options="header"]
-|===
-| Building block | Description
-
-| Event Consumer
-| Subscribes to `RideCompleted`, `PaymentSettled`, `UserRegistered`
-on the event bus and forwards them to the aggregators. Idempotent on
-the event identifier so replays are safe (ADR-6).
-
-| Ride Analytics Aggregator
-| Computes ride-related KPIs (number of rides, average distance,
-cancellation rate, …) from ride events.
-
-| Revenue Analytics Aggregator
-| Computes payment-related KPIs (turnover, commission, payouts per
-driver, …) from payment events.
-
-| AnalyticsRepository
-| Persists `AnalyticsRecord` entries (generic key / value metric
-records) used by all aggregators.
-
-| Reporting API
-| Read-only REST endpoint that exposes aggregated KPIs to admin
-dashboards.
-|===
