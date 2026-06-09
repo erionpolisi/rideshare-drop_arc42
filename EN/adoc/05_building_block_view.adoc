@@ -44,10 +44,16 @@ endif::arc42help[]
 
 image::05_level1.png[Whitebox Drop (Level 1)]
 
-*Rationale:* Drop is split by deployment unit — a Flutter *Mobile Client*
-on the user's device and a Spring Boot *Backend* holding all business
-logic. External capabilities the project does not build itself are
-reached as neighbours (see <<section-context-and-scope>>).
+*Rationale:* Drop is split by deployment unit. The mobile *Flutter
+Client* runs on the user's device. The server side started as one
+deployable monolith and is being incrementally split into microservices
+as load and team size grow (ADR-2). At the moment three server-side
+deployment units exist: the *Backend Monolith* (Spring Boot) holding
+the still-coupled bounded contexts, and the already-extracted
+*Payment Service* (ADR-3) and *Tracking Service* (ADR-4). External
+neighbouring systems (Firebase, Stripe Connect, Map & Routing Provider,
+Identity & Licence Verification) are described in
+<<section-context-and-scope>>.
 
 *Contained building blocks:*
 
@@ -55,25 +61,36 @@ reached as neighbours (see <<section-context-and-scope>>).
 |===
 | Building block | Description
 
-| Mobile Client (Flutter)
+| Flutter Client
 | App for passengers and drivers; renders the UI, reads device GPS, and
-talks to the Backend and Firebase (TC1).
+talks to the Backend Monolith and Firebase (TC1).
 
-| Backend (Spring Boot)
-| Modular monolith that exposes a REST API and holds all business logic;
-integrates Firebase, the Map & Routing provider and Stripe. Detailed at
-Level 2.
+| Backend Monolith
+| Spring Boot modular monolith that exposes the REST API and holds the
+business logic of Identity, Rides, Matching, Notifications, RideHistory
+and Analytics. Detailed at Level 2.
+
+| Payment Service
+| Microservice already extracted from the monolith. Integrates Stripe
+Connect for charges, payouts and the commission split (ADR-3).
+
+| Tracking Service
+| Microservice already extracted from the monolith. Streams driver
+locations and ride status to clients through Firestore and FCM (ADR-4).
 |===
 
-=== Backend — Whitebox (Level 2)
+=== Backend Monolith — Whitebox (Level 2)
 
-image::05_level2_backend.png[Backend Whitebox (Level 2)]
+image::05_level2_backend.png[Backend Monolith Whitebox (Level 2)]
 
-*Rationale:* The backend is a *modular monolith*: a functional
-decomposition into modules whose boundaries match the services it may
-later be split into. Modules communicate synchronously through the API
-layer and asynchronously through a Kafka event bus, which keeps them
-decoupled and eases the planned microservice extraction.
+*Rationale:* The Backend Monolith is a *modular monolith*: a
+functional decomposition into bounded-context modules whose boundaries
+match the services it may later be split into (ADR-2). Modules
+communicate synchronously through the API Layer and asynchronously
+through a Kafka event bus, which keeps them decoupled and eases the
+planned microservice extraction. Payments and Tracking have already
+been extracted (see Level 1); the remaining modules are described
+below.
 
 *Contained building blocks:*
 
@@ -85,58 +102,110 @@ decoupled and eases the planned microservice extraction.
 | REST facade; validates authentication and routes requests to the
 modules.
 
-| User & Identity
+| Identity
 | Registration, profiles and driver verification; integrates Firebase
 Authentication.
 
-| Ride Management
+| Rides
 | Ride search, matching, booking and ride lifecycle. Detailed at Level 3.
 
-| Tracking
-| Ingests driver locations, publishes them to the event bus, and exposes
-live position to clients through Firestore.
+| Notifications
+| Sends push notifications through Firebase Cloud Messaging (calls FCM
+directly for transactional messages and reacts to domain events from
+the bus).
 
-| Payment
-| Fare calculation, commission and driver payouts via Stripe.
-
-| Notification
-| Sends push notifications through Firebase Cloud Messaging.
-
-| Ride History
+| RideHistory
 | Stores and serves completed-ride records.
 
+| Analytics
+| Consumes domain events (`RideCompleted`, `PaymentSettled`,
+`UserRegistered`) and aggregates business KPIs. Detailed at Level 3.
+
 | Event Bus (Apache Kafka)
-| Asynchronous event backbone decoupling the modules.
+| Asynchronous event backbone decoupling the modules and the
+extracted microservices.
 |===
 
-=== Ride Management — Whitebox (Level 3)
+=== Level 3
 
-image::05_level3_analytics.png[Ride Management Whitebox (Level 3)]
+==== Rides — Whitebox (Level 3)
 
-*Rationale:* Ride Management follows the lifecycle of a ride, from the
-booking request through driver matching and assignment to the tracked,
-state-managed trip.
+image::05_level3_rides.png[Rides Whitebox (Level 3)]
 
-*Contained building blocks:*
+*Rationale:* Rides is decomposed by responsibility along the
+ride-booking flow: receiving the request (Booking), pricing it
+(Fare Estimation), finding candidate drivers (Matching), offering
+the ride to a driver (Driver Assignment) and persisting the
+ride state during its lifetime (Ride Lifecycle). Booking is the
+orchestrator; the others are called in sequence or in response to
+driver actions. Ride Lifecycle owns the `Ride` entity and emits the
+domain events that other contexts (Notifications, Analytics,
+Payment Service) consume.
+
+*Contained building blocks (blackboxes):*
 
 [cols="1,3", options="header"]
 |===
 | Building block | Description
 
 | Booking
-| Creates and manages booking requests; orchestrates the other blocks.
+| Application-service blackbox. Receives the REST request from the
+API Layer, orchestrates the other blackboxes and returns the booking
+confirmation. Idempotent on the client-supplied idempotency key
+(see <<section-concepts>>).
 
 | Fare Estimation
-| Calls the Map & Routing provider for distance and ETA and computes the
-fare.
+| Calls the *Map & Routing Provider* (see
+<<section-context-and-scope>>) for distance and ETA and computes the
+fare. Stateless.
 
-| Ride Search & Matching
-| Finds nearby available drivers for a request.
+| Matching
+| Finds nearby available drivers for a booking request. Reads driver
+availability through the Tracking Service.
 
 | Driver Assignment
-| Offers rides to drivers and handles accept / decline.
+| Offers the ride to candidate drivers in ranked order and handles
+their accept / decline responses within a configurable timeout.
 
 | Ride Lifecycle
-| State machine for a ride (requested → accepted → in progress →
-completed / cancelled); emits ride events and persists state.
+| Owns the `Ride` aggregate, persists it and implements its state
+machine (`REQUESTED` → `ACCEPTED` → `IN_PROGRESS` → `COMPLETED` /
+`CANCELLED`). Publishes `RideRequested`, `RideAccepted`,
+`RideCompleted` and `RideCancelled` on the Event Bus.
+|===
+
+==== Analytics — Whitebox (Level 3)
+
+image::05_level3_rides.png[Analytics Whitebox (Level 3)]
+
+*Rationale:* Analytics consumes domain events from the bus and turns
+them into queryable business KPIs without ever touching the
+operational write path of Rides or Payments.
+
+*Contained building blocks (blackboxes):*
+
+[cols="1,3", options="header"]
+|===
+| Building block | Description
+
+| Event Consumer
+| Subscribes to `RideCompleted`, `PaymentSettled`, `UserRegistered`
+on the event bus and forwards them to the aggregators. Idempotent on
+the event identifier so replays are safe (ADR-6).
+
+| Ride Analytics Aggregator
+| Computes ride-related KPIs (number of rides, average distance,
+cancellation rate, …) from ride events.
+
+| Revenue Analytics Aggregator
+| Computes payment-related KPIs (turnover, commission, payouts per
+driver, …) from payment events.
+
+| AnalyticsRepository
+| Persists `AnalyticsRecord` entries (generic key / value metric
+records) used by all aggregators.
+
+| Reporting API
+| Read-only REST endpoint that exposes aggregated KPIs to admin
+dashboards.
 |===
