@@ -34,45 +34,7 @@ secondary qualities and links them to the scenarios in section 10.2.
 The concrete service-level objectives that operations is measured
 against are listed in section 10.3.
 
-[cols="1,2,3", options="header"]
-|===
-| Quality Category | Quality | Description 
-
-| Security
-| Confidentiality
-| Personal data and payment tokens accessible only to authenticated
-users with the appropriate role.
-
-| Security
-| Authentication
-| Every request to the backend carries a valid JWT; expired or invalid
-tokens are rejected with HTTP 401.
-
-| Functional Suitability
-| Correctness
-| Booking, tracking, completion and payment behave as specified for
-the use cases in chapter 3.
-
-| Functional Suitability
-| Reliability
-| Ride completion and payment succeed even if non-critical components
-(Analytics, Notifications) are temporarily unavailable.
-
-| Scalability
-| Real-time performance
-| Live tracking updates stay perceivably real-time even when the
-number of concurrent rides grows by an order of magnitude.
-
-| Sustainability
-| Resource efficiency
-| Routing minimises detours; carpooling matches are preferred where
-possible.
-
-| Sustainability
-| Eco-friendly fleet
-| Driver onboarding and matching support a preference for electric
-vehicles.
-|===
+image::10_quality_tree-EN.png[Quality Tree]
 
 === Quality Scenarios
 
