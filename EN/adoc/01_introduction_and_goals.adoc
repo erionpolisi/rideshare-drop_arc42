@@ -87,7 +87,7 @@ endif::arc42help[]
 [options="header",cols="1,2,4"]
 |===
 |Priority|Quality Goal|Motivation / Scenario
-|1|Security|Sensitive customer data (personal information, payment details) and real-time location data must be protected from unauthorized access and misuse at all times.
+|1|Security|Sensitive customer data (personal information, payment details) and real-time location data must be protected from unauthorized access and misuse at all times, in line with constraint OC1 (GDPR / DSGVO).
 |2|Functional Suitability|Critical features such as real-time ride tracking must operate correctly and reliably. High-quality, well-supported frameworks must be used to ensure correctness and appropriate behavior across all core functions.
 |3|Scalability|The system must support smooth expansion into international markets. As the number of concurrent users grows, real-time features (e.g. location updates) must not degrade in performance. Both vertical and horizontal scaling strategies must be applicable.
 |4|Sustainability|The routing system should minimize traffic congestion by distributing drivers intelligently. The platform should encourage the use of electric vehicles and support carpooling features to reduce emissions and environmental impact.

@@ -117,7 +117,8 @@ modules.
 
 | Identity
 | Registration, profiles and driver verification; integrates Firebase
-Authentication.
+Authentication. Owns the personal data of users and is therefore the
+primary entry point for GDPR data-subject requests (constraint OC1).
 
 | Rides
 | Ride booking, fare estimation, matching, driver assignment and

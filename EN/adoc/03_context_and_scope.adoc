@@ -95,7 +95,10 @@ can be omitted.
 The Passenger and Driver are human actors interacting through the
 mobile app. The Payment Processor, Map & Routing Provider and
 Verification Service are external systems Drop depends on but does not
-own (see constraint TC2).
+own (see constraint TC2). All personal data exchanged with these
+actors and external systems is processed under constraint OC1
+(GDPR / DSGVO); the external providers act as data processors under
+Art. 28 GDPR.
 
 === Technical Context
 
